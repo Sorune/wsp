@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_source() {
+  local source="$1" dir target
+  while [[ -L "$source" ]]; do
+    case "$source" in
+      */*) dir="${source%/*}" ;;
+      *) dir="." ;;
+    esac
+    dir="$(cd -P "$dir" >/dev/null 2>&1 && pwd)"
+    target="$(readlink "$source")"
+    case "$target" in
+      /*) source="$target" ;;
+      *) source="$dir/$target" ;;
+    esac
+  done
+  printf '%s\n' "$source"
+}
+
+SOURCE_PATH="$(resolve_source "${BASH_SOURCE[0]}")"
+case "$SOURCE_PATH" in
+  */*) SCRIPT_DIR="${SOURCE_PATH%/*}" ;;
+  *) SCRIPT_DIR="." ;;
+esac
+SCRIPT_DIR="$(cd -P "$SCRIPT_DIR" >/dev/null 2>&1 && pwd)"
+WSP_ROOT="${WSP_ROOT:-$(cd -P "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)}"
+VERSION_FILE="$WSP_ROOT/VERSION"
+PRODUCT_VERSION="UNKNOWN"
+[[ -f "$VERSION_FILE" ]] && IFS= read -r PRODUCT_VERSION < "$VERSION_FILE"
+
+usage() {
+  cat <<'EOF2'
+Usage: wsp <command> [args]
+
+Commands:
+  version                 Show Product version and source provenance.
+  status                  Inspect the Git workspace containing the current directory.
+  doctor                  Check local Product runtime prerequisites.
+  repo inspect [path]     Inspect a Git repository/workspace copy without network mutation.
+  help                    Show this help.
+
+Current Product scope: READ-ONLY / GIT-FIRST / BASH-FIRST.
+EOF2
+}
+
+fail() {
+  printf 'STATUS: BLOCKED\n' >&2
+  printf 'REASON: %s\n' "$1" >&2
+  exit 2
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "MISSING_DEPENDENCY:$1"
+}
+
+git_ro() {
+  GIT_OPTIONAL_LOCKS=0 git "$@"
+}
+
+sanitize_remote() {
+  local remote="$1"
+  if [[ "$remote" =~ ^([A-Za-z][A-Za-z0-9+.-]*://)[^/@]+@(.+)$ ]]; then
+    printf '%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+  else
+    printf '%s\n' "$remote"
+  fi
+}
+
+product_revision() {
+  if command -v git >/dev/null 2>&1 && git_ro -C "$WSP_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git_ro -C "$WSP_ROOT" rev-parse HEAD 2>/dev/null || printf 'UNKNOWN\n'
+  else
+    printf 'UNKNOWN\n'
+  fi
+}
+
+inspect_repo() {
+  local path="$1" heading="$2"
+  local root head branch tree remote upstream ahead behind counts
+
+  require_command git
+  [[ -d "$path" ]] || fail "PATH_NOT_DIRECTORY:$path"
+
+  root="$(git_ro -C "$path" rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -n "$root" ]] || fail "NOT_A_GIT_WORKSPACE_COPY:$path"
+  root="$(cd -P "$root" >/dev/null 2>&1 && pwd)"
+
+  head="$(git_ro -C "$root" rev-parse HEAD 2>/dev/null || printf 'UNKNOWN')"
+  branch="$(git_ro -C "$root" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'DETACHED')"
+  if [[ -n "$(git_ro -C "$root" status --porcelain=v1 --untracked-files=normal 2>/dev/null || true)" ]]; then
+    tree="DIRTY"
+  else
+    tree="CLEAN"
+  fi
+
+  remote="$(git_ro -C "$root" remote get-url origin 2>/dev/null || printf 'NONE')"
+  [[ "$remote" == "NONE" ]] || remote="$(sanitize_remote "$remote")"
+
+  upstream="$(git_ro -C "$root" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || printf 'NONE')"
+  ahead="UNKNOWN"
+  behind="UNKNOWN"
+  if [[ "$upstream" != "NONE" ]]; then
+    counts="$(git_ro -C "$root" rev-list --left-right --count "$upstream...HEAD" 2>/dev/null || true)"
+    if [[ -n "$counts" ]]; then
+      behind="${counts%%[[:space:]]*}"
+      ahead="${counts##*[[:space:]]}"
+    fi
+  fi
+
+  printf '%s\n' "$heading"
+  printf 'REPOSITORY_ROOT: %s\n' "$root"
+  printf 'WORKSPACE_COPY: %s\n' "$root"
+  printf 'MACHINE: %s\n' "${HOSTNAME:-UNKNOWN}"
+  printf 'REVISION: %s\n' "$head"
+  printf 'BRANCH: %s\n' "$branch"
+  printf 'WORKING_TREE: %s\n' "$tree"
+  printf 'REMOTE_ORIGIN: %s\n' "$remote"
+  printf 'UPSTREAM: %s\n' "$upstream"
+  printf 'AHEAD: %s\n' "$ahead"
+  printf 'BEHIND: %s\n' "$behind"
+  printf 'NETWORK_FETCH: NOT_PERFORMED\n'
+  printf 'AUTHORITY: OBSERVED_ONLY\n'
+}
+
+cmd_version() {
+  printf 'Workspace Ops\n'
+  printf 'PRODUCT_VERSION: %s\n' "$PRODUCT_VERSION"
+  printf 'CLI: wsp\n'
+  printf 'IMPLEMENTATION: Bash\n'
+  printf 'SOURCE_ROOT: %s\n' "$WSP_ROOT"
+  printf 'SOURCE_REVISION: %s\n' "$(product_revision)"
+}
+
+cmd_doctor() {
+  local blocked=0 dep label
+  printf 'WORKSPACE OPS DOCTOR\n'
+  printf 'PRODUCT_VERSION: %s\n' "$PRODUCT_VERSION"
+  printf 'BASH_VERSION: %s\n' "${BASH_VERSION:-UNKNOWN}"
+
+  for dep in git readlink; do
+    case "$dep" in
+      git) label='GIT' ;;
+      readlink) label='READLINK' ;;
+      *) label="$dep" ;;
+    esac
+    if command -v "$dep" >/dev/null 2>&1; then
+      printf 'DEPENDENCY_%s: AVAILABLE\n' "$label"
+    else
+      printf 'DEPENDENCY_%s: MISSING\n' "$label"
+      blocked=$((blocked + 1))
+    fi
+  done
+
+  if [[ -f "$VERSION_FILE" ]]; then
+    printf 'PRODUCT_LAYOUT: PASS\n'
+  else
+    printf 'PRODUCT_LAYOUT: BLOCKED\n'
+    blocked=$((blocked + 1))
+  fi
+
+  if command -v git >/dev/null 2>&1 && git_ro rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    printf 'CURRENT_DIRECTORY_GIT: YES\n'
+  else
+    printf 'CURRENT_DIRECTORY_GIT: NO\n'
+  fi
+
+  printf 'NETWORK_MUTATION: NONE\n'
+  if [[ "$blocked" -gt 0 ]]; then
+    printf 'OVERALL: BLOCKED\n'
+    exit 2
+  fi
+  printf 'OVERALL: PASS\n'
+}
+
+COMMAND="${1:-help}"
+[[ $# -eq 0 ]] || shift
+
+case "$COMMAND" in
+  version)
+    [[ $# -eq 0 ]] || fail 'USAGE:version'
+    cmd_version
+    ;;
+  status)
+    [[ $# -eq 0 ]] || fail 'USAGE:status'
+    inspect_repo "." "WORKSPACE STATUS"
+    ;;
+  doctor)
+    [[ $# -eq 0 ]] || fail 'USAGE:doctor'
+    cmd_doctor
+    ;;
+  repo)
+    sub="${1:-}"
+    [[ $# -eq 0 ]] || shift
+    case "$sub" in
+      inspect)
+        [[ $# -le 1 ]] || fail 'USAGE:repo inspect [path]'
+        inspect_repo "${1:-.}" "WORKSPACE REPOSITORY INSPECT"
+        ;;
+      *) fail 'USAGE:repo inspect [path]' ;;
+    esac
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    printf 'ERROR: unknown command: %s\n' "$COMMAND" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,30 @@
+name: Product P0 validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    name: ${{ matrix.os }} selftest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Normalize executable bits
+        run: chmod +x bin/wsp tests/selftest.sh
+      - name: Bash syntax
+        run: bash -n bin/wsp tests/selftest.sh
+      - name: Product selftest
+        run: bash tests/selftest.sh
