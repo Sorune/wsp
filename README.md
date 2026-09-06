@@ -16,6 +16,11 @@ Physical Workspace / Git State
 
 P0는 **GIT-FIRST / BASH-FIRST**이며, managed Git repository에는 read-only다. P0D부터 Product 자체 설치/설정 파일에 한해서 명시적인 bootstrap mutation을 허용한다.
 
+```text
+BASH-FIRST
+!= BASH-ONLY INVOCATION SURFACE
+```
+
 ## Workspace binding
 
 핵심 계약은 다음과 같다.
@@ -49,7 +54,7 @@ workspace.root=/resolved/absolute/path
 
 ## CLI
 
-```bash
+```text
 wsp version
 wsp init [workspace-root]
 wsp status
@@ -63,7 +68,7 @@ wsp repo inspect [path]
 
 `repo inspect`와 configured Workspace의 Git inspection은 fetch/pull/reset/clean/checkout mutation을 수행하지 않는다.
 
-## Quick start
+## Quick start — Linux/macOS
 
 Checkout에서:
 
@@ -96,7 +101,68 @@ PATH 변경은 다음 marker 사이의 최소 managed block만 append하며 기�
 # <<< wsp managed path <<<
 ```
 
-이미 unrelated `wsp` executable이 있으면 silent overwrite하지 않고 BLOCKED 처리한다. 기존 정상 Product `wsp` 등록과 managed PATH block은 재실행 시 보존된다. shell alias는 필수 설치 방식이 아니다.
+## Quick start — Windows native
+
+Windows native host에서는 CMD와 PowerShell이 **같은 `wsp` command surface**를 사용한다.
+
+Checkout의 PowerShell에서 최초 설치:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap-windows.ps1
+```
+
+`pwsh`가 없고 Windows PowerShell만 있는 환경에서는 `powershell.exe`로 같은 script를 실행할 수 있다.
+
+기본 command directory:
+
+```text
+%USERPROFILE%\.local\bin
+```
+
+Windows bootstrap은 Product-owned `wsp.cmd`를 설치하고 해당 directory가 User PATH에 없을 때만 append한다. 기존 User PATH는 보존한다. PATH가 변경되었다면 새 terminal을 연 뒤:
+
+```text
+CMD> where wsp
+CMD> wsp version
+
+PS> Get-Command wsp
+PS> wsp version
+```
+
+Windows routing은 다음 구조다.
+
+```text
+Windows native terminal
+→ wsp.cmd
+→ thin PowerShell adapter
+→ Git-for-Windows Bash runtime
+→ shared bin/wsp Product core
+```
+
+따라서 CMD와 PowerShell을 별도 Product로 만들지 않는다. Git for Windows의 Bash는 내부 runtime adapter이며, 사용자가 Git Bash에서 직접 `bin/wsp`를 실행하는 compatibility environment와는 별개다.
+
+현재 Windows native 상태는:
+
+```text
+IMPLEMENTED / CI VERIFIED
+PHYSICAL WINDOWS ACCEPTANCE: PENDING
+```
+
+실제 Windows host physical acceptance 전에는 최종 support PASS로 승격하지 않는다.
+
+## Installation safety
+
+Linux/macOS/Windows 공통 원칙:
+
+```text
+existing unrelated wsp
+→ NEVER overwrite silently
+
+existing Product wsp
+→ idempotent preserve/update
+```
+
+Windows는 User PATH를, Linux/macOS는 해당 shell rc의 WSP managed block을 최소 범위로만 수정한다. shell alias는 필수 설치 방식이 아니다.
 
 ## Configuration lifecycle
 
@@ -126,24 +192,35 @@ PRODUCT VERSION != CONFIG VERSION
 
 ## Platform boundary
 
-현재 CI-verified Product mutation path:
+현재 Product routing:
 
 ```text
-Linux Bash: SUPPORTED
+Linux native Bash: SUPPORTED
 macOS Bash: SUPPORTED
+
+Windows native host:
+  CMD / PowerShell terminal surfaces
+  IMPLEMENTED / CI VERIFIED
+  physical acceptance PENDING
+
+WSL Bash: detected / UNVERIFIED
+Git Bash direct: detected / UNSUPPORTED
+unknown OS: UNSUPPORTED
 ```
 
-Linux/macOS의 command PATH persistence는 bash와 zsh startup file 범위에서 검증한다.
-
-Windows는 family/environment를 감지하지만 P0D에서 support claim을 앞당기지 않는다.
+Windows native adapter 내부에서 Git-for-Windows Bash를 사용하는 것은 direct Git Bash support claim이 아니다.
 
 ```text
-WSL Bash: detected / UNVERIFIED
-Git Bash: detected / UNSUPPORTED
-native PowerShell: not this Bash implementation
+INTERNAL RUNTIME ADAPTER
+!= USER TERMINAL ENVIRONMENT
 ```
 
-Windows physical acceptance 전에는 init/reconcile/bootstrap mutation을 지원한다고 주장하지 않는다.
+Codex CLI, Claude CLI 같은 terminal tool이 normal PATH를 통해 `wsp`를 찾을 수 있는 구조를 목표로 하지만 provider-specific session identity는 이 gate에 포함하지 않는다.
+
+```text
+COMMAND AVAILABILITY
+!= PROVIDER IDENTITY BINDING
+```
 
 ## Reference / Product / Lab
 
@@ -164,14 +241,15 @@ Reference: [Sorune/workspace-ops-public](https://github.com/Sorune/workspace-ops
 PRIVATE EXPERIENCE != AUTOMATIC PUBLIC AUTHORITY
 ```
 
-Private Lab의 하드코딩된 path/machine/project assumption을 복사하지 않는다.
+Private Lab의 하드코딩된 path/machine/project/session assumption을 복사하지 않는다.
 
 ## Current maturity
 
 ```text
 Product: Workspace Ops
 CLI: wsp
-Implementation: Bash
+Core implementation: Bash-first
+Windows native invocation: thin PowerShell adapter + wsp.cmd
 Source control: Git-first
 Workspace model: one explicit Workspace Root
 Config schema: 1
@@ -182,14 +260,23 @@ Stable CLI/schema compatibility: NOT YET FROZEN
 
 ## Development
 
+Linux/macOS:
+
 ```bash
-bash -n bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/selftest.sh
+bash -n bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/platform-routing.sh tests/selftest.sh
 bash tests/config-lifecycle.sh
 bash tests/path-registration.sh
+bash tests/platform-routing.sh
 bash tests/selftest.sh
 ```
 
-CI는 Linux와 macOS에서 config lifecycle, command/PATH registration, 기존 Git read-only behavior를 함께 검증한다.
+Windows native:
+
+```powershell
+./tests/windows-routing.ps1
+```
+
+CI는 Linux/macOS 기존 regression과 Windows native CMD/PowerShell command surface를 함께 검증한다.
 
 ## License
 
