@@ -1,6 +1,6 @@
 # Bash-First Implementation Policy
 
-Status: CURRENT P0 IMPLEMENTATION POLICY
+Status: CURRENT P0D IMPLEMENTATION POLICY
 
 ## Primary rule
 
@@ -11,85 +11,139 @@ Bash-first
 
 Bash is the initial first-class Workspace Ops Product implementation. It remains primary while it is the simplest correct implementation of the Product contract.
 
-## Why Bash fits P0
+## Current implementation pressure
 
-P0 is dominated by:
+P0D is dominated by:
 
 ```text
-Git inspection
+platform detection
 filesystem/path resolution
-local environment checks
+small text configuration
+atomic local file replacement
+launcher registration
+Git inspection
 status / doctor
 read-only reconciliation
-text output
 ```
 
-This is orchestration and inspection work, not inherently a compiled-runtime problem.
+This is still orchestration/inspection work and does not yet justify a mandatory native rewrite.
 
 ## Dependency policy
 
-Do not claim that Workspace Ops is dependency-free.
-
-Current P0 requirement is intentionally small:
+Current Product dependencies remain intentionally small:
 
 ```text
 bash
 git
 readlink
-standard Unix shell environment
+uname
+mktemp
+standard Unix userland needed for mkdir/mv/ln
 ```
 
-Additional dependencies must be explicit. Hosting-provider clients such as `gh` are not Core P0 requirements.
+Hosting-provider clients are not Core P0D requirements.
+
+## Configuration implementation
+
+The initial Product config is a simple text-native properties file:
+
+```text
+<workspace-root>/.wsp.properties
+```
+
+Schema identity is explicit and independent from Product version:
+
+```text
+wsp.config.version=1
+```
+
+The parser does not `source` or `eval` configuration. Required keys are parsed as data. Unknown keys are preserved during supported reconciliation.
+
+Config writes prefer:
+
+```text
+write temporary file
+→ validate
+→ same-directory atomic replace
+```
+
+```text
+CONFIG EXISTS != TEMPLATE OVERWRITE
+INVALID != SILENTLY REPLACE
+```
+
+The current migration foundation supports unversioned/v0 input to schema 1. A newer unknown schema is blocked; it is not reinterpreted as v1.
+
+## Workspace binding implementation
+
+Workspace-local config owns the configured root. The current user context stores a small active-root pointer under:
+
+```text
+${XDG_CONFIG_HOME:-$HOME/.config}/wsp/workspace-root
+```
+
+`WSP_STATE_HOME` may override this state location for tests/isolated environments. This is a Product implementation detail, not Reference semantics.
+
+## Command registration
+
+P0D `wsp bootstrap` registers the checked-out Product executable with a symlink in an explicitly PATH-visible bin directory.
+
+```text
+shell alias
+!= required installation mechanism
+```
+
+The default candidate is `$HOME/.local/bin`, but bootstrap refuses to claim success if that directory is not already on `PATH`. An unrelated existing `wsp` command or target file is never overwritten silently.
+
+Release packaging remains a later gate.
+
+## Platform policy
+
+Platform family is detected from the runtime environment.
+
+```text
+Linux native Bash: CI-verified
+macOS Bash: CI-verified
+WSL Bash: detected but unverified
+Git Bash: detected but unsupported in P0D
+native PowerShell: outside this Bash implementation
+```
+
+Mutation commands (`init`, `config reconcile`, `bootstrap`) are gated to the currently supported platform set. Read-only commands may still expose diagnostic information on unverified environments without converting that into a support claim.
+
+## Git boundary
+
+All repository inspection continues to use read-only Git behavior. Configuration/bootstrap mutation must never become implicit permission to mutate managed repositories.
+
+```text
+PRODUCT SELF MUTATION
+!= GIT CONTENT MUTATION
+```
 
 ## Distribution direction
 
-The source checkout is a valid development/deployment artifact during P0.
+During P0D the source checkout remains a valid Product artifact:
 
 ```text
-INSTALL  = checkout approved revision + PATH registration
-UPDATE   = select a newer approved revision
-ROLLBACK = select an older approved revision
+INSTALL  = checkout approved revision + explicit wsp bootstrap
+INIT     = explicit Workspace Root configuration
+UPDATE   = select a newer approved Product revision
+CONFIG   = preserve/reconcile separately from Product revision
+ROLLBACK = select an older approved Product revision
 PROVENANCE = Git revision
 ```
 
-Release packaging and installer behavior are not stable yet.
-
-## Migration policy
-
-There is no schedule-driven rewrite.
-
 ```text
-Bash
-→ real dogfooding
-→ implementation pressure evaluation
-    ├─ Bash sufficient → KEEP BASH
-    └─ demonstrated limit → NATIVE IMPLEMENTATION REVIEW
+PRODUCT UPDATE != CONFIG RESET
 ```
 
-Potential review triggers include:
+## Native migration policy
 
-- complex structured state;
-- transactional persistence;
-- high concurrency;
-- distributed lease/locking;
-- long-running daemon requirements;
-- large fleet coordination;
-- native Windows requirements;
-- structured RPC/API requirements;
-- measured performance or maintainability limits caused by shell semantics.
+There is no schedule-driven rewrite. Potential triggers remain complex structured state, transactional persistence, concurrency, distributed coordination, long-running daemon requirements, native Windows support, structured RPC/API requirements, or demonstrated shell maintainability/performance limits.
 
-Go is a likely native candidate if those pressures emerge. Rust remains a pressure-driven alternative. Neither is currently authorized as a mandatory successor.
-
-```text
-NATIVE COMPONENT INTRODUCED
-!= BASH RETIRED
-```
-
-## Semantic boundary
+Go remains a likely candidate if such pressure appears; it is not part of Reference semantics and is not authorized merely by P0D growth.
 
 ```text
 BASH IMPLEMENTATION DETAIL
 != REFERENCE SEMANTICS
 ```
-
-Shell exit codes, environment variable names, parsing choices, directory names, and temporary layouts must not become semantic contracts merely because the first implementation uses them.

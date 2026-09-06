@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+CONFIG_BASENAME='.wsp.properties'
+CONFIG_SCHEMA_VERSION='1'
+
 resolve_source() {
   local source="$1" dir target
   while [[ -L "$source" ]]; do
@@ -34,13 +37,18 @@ usage() {
 Usage: wsp <command> [args]
 
 Commands:
-  version                 Show Product version and source provenance.
-  status                  Inspect the Git workspace containing the current directory.
-  doctor                  Check local Product runtime prerequisites.
-  repo inspect [path]     Inspect a Git repository/workspace copy without network mutation.
-  help                    Show this help.
+  version                              Show Product version and source provenance.
+  init [workspace-root]                Explicitly initialize/bind one Workspace Root.
+  status                               Show configured Workspace status; unconfigured mode falls back to cwd inspection only.
+  doctor                               Validate platform, runtime, configuration, and command registration.
+  config show                          Show the active Workspace configuration summary.
+  config validate                      Validate the active Workspace configuration without mutation.
+  config reconcile                     Apply supported config-schema reconciliation while preserving user values.
+  bootstrap [--bin-dir DIR]            Register this Product executable as `wsp` on supported Bash platforms.
+  repo inspect [path]                  Inspect a Git repository/workspace copy without network mutation.
+  help                                 Show this help.
 
-Current Product scope: READ-ONLY / GIT-FIRST / BASH-FIRST.
+Product boundary: explicit Product/config bootstrap mutation is allowed; managed Git repositories remain read-only.
 EOF2
 }
 
@@ -56,6 +64,58 @@ require_command() {
 
 git_ro() {
   GIT_OPTIONAL_LOCKS=0 git "$@"
+}
+
+canonical_dir() {
+  local path="$1"
+  [[ -d "$path" ]] || return 1
+  (cd -P "$path" >/dev/null 2>&1 && pwd)
+}
+
+state_home() {
+  if [[ -n "${WSP_STATE_HOME:-}" ]]; then
+    printf '%s\n' "$WSP_STATE_HOME"
+    return 0
+  fi
+  [[ -n "${HOME:-}" ]] || fail 'HOME_UNAVAILABLE'
+  printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/wsp"
+}
+
+binding_file() {
+  printf '%s/workspace-root\n' "$(state_home)"
+}
+
+write_atomic_from_stdin() {
+  local file="$1" dir tmp
+  case "$file" in
+    */*) dir="${file%/*}" ;;
+    *) dir='.' ;;
+  esac
+  mkdir -p "$dir"
+  tmp="$(mktemp "$file.tmp.XXXXXX")" || fail 'TEMPFILE_CREATE_FAILED'
+  if ! cat > "$tmp"; then
+    rm -f "$tmp"
+    fail 'TEMPFILE_WRITE_FAILED'
+  fi
+  if ! mv "$tmp" "$file"; then
+    rm -f "$tmp"
+    fail 'ATOMIC_REPLACE_FAILED'
+  fi
+}
+
+write_binding() {
+  local root="$1" file
+  file="$(binding_file)"
+  printf '%s\n' "$root" | write_atomic_from_stdin "$file"
+}
+
+read_binding() {
+  local file root
+  file="$(binding_file)"
+  [[ -f "$file" ]] || return 1
+  IFS= read -r root < "$file" || true
+  [[ -n "$root" ]] || return 2
+  printf '%s\n' "$root"
 }
 
 sanitize_remote() {
@@ -75,6 +135,248 @@ product_revision() {
   fi
 }
 
+PLATFORM_FAMILY='unknown'
+PLATFORM_ENVIRONMENT='unknown'
+PLATFORM_SUPPORT='UNSUPPORTED'
+PLATFORM_OS='UNKNOWN'
+PLATFORM_ARCH='UNKNOWN'
+
+detect_platform() {
+  local os arch
+  os="$(uname -s 2>/dev/null || printf 'UNKNOWN')"
+  arch="$(uname -m 2>/dev/null || printf 'UNKNOWN')"
+  PLATFORM_OS="$os"
+  PLATFORM_ARCH="$arch"
+  case "$os" in
+    Darwin)
+      PLATFORM_FAMILY='macOS'
+      PLATFORM_ENVIRONMENT='native-bash'
+      PLATFORM_SUPPORT='SUPPORTED'
+      ;;
+    Linux)
+      if [[ -r /proc/version ]] && grep -qi 'microsoft' /proc/version 2>/dev/null; then
+        PLATFORM_FAMILY='Windows'
+        PLATFORM_ENVIRONMENT='WSL-Bash'
+        PLATFORM_SUPPORT='UNVERIFIED_WSL_BASH'
+      else
+        PLATFORM_FAMILY='Linux'
+        PLATFORM_ENVIRONMENT='native-bash'
+        PLATFORM_SUPPORT='SUPPORTED'
+      fi
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      PLATFORM_FAMILY='Windows'
+      PLATFORM_ENVIRONMENT='Git-Bash'
+      PLATFORM_SUPPORT='UNSUPPORTED'
+      ;;
+    *)
+      PLATFORM_FAMILY="$os"
+      PLATFORM_ENVIRONMENT='unknown'
+      PLATFORM_SUPPORT='UNSUPPORTED'
+      ;;
+  esac
+}
+
+require_supported_platform() {
+  detect_platform
+  case "$PLATFORM_SUPPORT" in
+    SUPPORTED) return 0 ;;
+    *) fail "UNSUPPORTED_PLATFORM:$PLATFORM_OS:$PLATFORM_ENVIRONMENT" ;;
+  esac
+}
+
+CONFIG_VERSION=''
+CONFIG_ROOT=''
+CONFIG_STATE=''
+CONFIG_REASON=''
+CONFIG_UNKNOWN_COUNT=0
+CONFIG_NEEDS_RECONCILE='no'
+RECONCILE_RESULT='NONE'
+
+parse_config() {
+  local file="$1" expected_root="$2"
+  local line key value version_count=0 root_count=0 unknown_count=0 syntax_error=''
+  local file_root resolved_root
+
+  CONFIG_VERSION=''
+  CONFIG_ROOT=''
+  CONFIG_STATE=''
+  CONFIG_REASON=''
+  CONFIG_UNKNOWN_COUNT=0
+  CONFIG_NEEDS_RECONCILE='no'
+
+  [[ -f "$file" ]] || { CONFIG_STATE='ABSENT'; CONFIG_REASON='CONFIG_NOT_FOUND'; return 1; }
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    case "$line" in \#*|\!*) continue ;; esac
+    case "$line" in
+      *=*) key="${line%%=*}"; value="${line#*=}" ;;
+      *) syntax_error='PROPERTY_MISSING_EQUALS'; break ;;
+    esac
+    if [[ ! "$key" =~ ^[A-Za-z0-9._-]+$ ]]; then
+      syntax_error="INVALID_PROPERTY_KEY:$key"
+      break
+    fi
+    case "$key" in
+      wsp.config.version)
+        version_count=$((version_count + 1))
+        CONFIG_VERSION="$value"
+        ;;
+      workspace.root)
+        root_count=$((root_count + 1))
+        CONFIG_ROOT="$value"
+        ;;
+      *) unknown_count=$((unknown_count + 1)) ;;
+    esac
+  done < "$file"
+
+  CONFIG_UNKNOWN_COUNT="$unknown_count"
+  if [[ -n "$syntax_error" ]]; then
+    CONFIG_STATE='INVALID'; CONFIG_REASON="$syntax_error"; return 2
+  fi
+  if [[ "$version_count" -gt 1 ]]; then
+    CONFIG_STATE='INVALID'; CONFIG_REASON='DUPLICATE_PROPERTY:wsp.config.version'; return 2
+  fi
+  if [[ "$root_count" -gt 1 ]]; then
+    CONFIG_STATE='INVALID'; CONFIG_REASON='DUPLICATE_PROPERTY:workspace.root'; return 2
+  fi
+
+  if [[ "$version_count" -eq 0 ]]; then
+    CONFIG_VERSION='0'
+    CONFIG_NEEDS_RECONCILE='yes'
+  elif [[ ! "$CONFIG_VERSION" =~ ^[0-9]+$ ]]; then
+    CONFIG_STATE='INVALID'; CONFIG_REASON="INVALID_CONFIG_VERSION:$CONFIG_VERSION"; return 2
+  elif [[ "$CONFIG_VERSION" -gt "$CONFIG_SCHEMA_VERSION" ]]; then
+    CONFIG_STATE='UNSUPPORTED_NEWER'; CONFIG_REASON="UNSUPPORTED_NEWER_CONFIG_VERSION:$CONFIG_VERSION"; return 2
+  elif [[ "$CONFIG_VERSION" -lt "$CONFIG_SCHEMA_VERSION" ]]; then
+    CONFIG_NEEDS_RECONCILE='yes'
+  fi
+
+  if [[ "$root_count" -eq 0 ]]; then
+    [[ -n "$expected_root" ]] || { CONFIG_STATE='INVALID'; CONFIG_REASON='MISSING_PROPERTY:workspace.root'; return 2; }
+    CONFIG_ROOT="$expected_root"
+    CONFIG_NEEDS_RECONCILE='yes'
+  fi
+
+  [[ -n "$CONFIG_ROOT" ]] || { CONFIG_STATE='INVALID'; CONFIG_REASON='EMPTY_PROPERTY:workspace.root'; return 2; }
+  case "$CONFIG_ROOT" in /*) ;; *) CONFIG_STATE='INVALID'; CONFIG_REASON='WORKSPACE_ROOT_NOT_ABSOLUTE'; return 2 ;; esac
+  [[ -d "$CONFIG_ROOT" ]] || { CONFIG_STATE='INVALID'; CONFIG_REASON="WORKSPACE_ROOT_NOT_DIRECTORY:$CONFIG_ROOT"; return 2; }
+  resolved_root="$(canonical_dir "$CONFIG_ROOT" 2>/dev/null || true)"
+  [[ -n "$resolved_root" ]] || { CONFIG_STATE='INVALID'; CONFIG_REASON='WORKSPACE_ROOT_RESOLUTION_FAILED'; return 2; }
+
+  if [[ -n "$expected_root" && "$resolved_root" != "$expected_root" ]]; then
+    CONFIG_STATE='INVALID'; CONFIG_REASON="WORKSPACE_ROOT_MISMATCH:$resolved_root"; return 2
+  fi
+
+  case "$file" in
+    */*) file_root="${file%/*}" ;;
+    *) file_root='.' ;;
+  esac
+  file_root="$(canonical_dir "$file_root" 2>/dev/null || true)"
+  if [[ -n "$file_root" && "$resolved_root" != "$file_root" ]]; then
+    CONFIG_STATE='INVALID'; CONFIG_REASON="CONFIG_LOCATION_ROOT_MISMATCH:$resolved_root"; return 2
+  fi
+
+  CONFIG_ROOT="$resolved_root"
+  if [[ "$CONFIG_NEEDS_RECONCILE" == 'yes' ]]; then
+    CONFIG_STATE='RECONCILE_REQUIRED'
+    CONFIG_REASON='SUPPORTED_SCHEMA_MIGRATION_AVAILABLE'
+    return 3
+  fi
+  CONFIG_STATE='VALID'
+  CONFIG_REASON='NONE'
+  return 0
+}
+
+reconcile_config_file() {
+  local file="$1" expected_root="$2"
+  local rc line key wrote_version='no' wrote_root='no' tmp
+  RECONCILE_RESULT='NONE'
+
+  if parse_config "$file" "$expected_root"; then
+    RECONCILE_RESULT='NO_CHANGE_REQUIRED'
+    return 0
+  else
+    rc=$?
+  fi
+  case "$rc" in
+    3) ;;
+    *) fail "$CONFIG_REASON" ;;
+  esac
+
+  tmp="$(mktemp "$file.reconcile.XXXXXX")" || fail 'TEMPFILE_CREATE_FAILED'
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    case "$line" in
+      wsp.config.version=*)
+        printf 'wsp.config.version=%s\n' "$CONFIG_SCHEMA_VERSION" >> "$tmp"
+        wrote_version='yes'
+        ;;
+      workspace.root=*)
+        printf '%s\n' "$line" >> "$tmp"
+        wrote_root='yes'
+        ;;
+      *) printf '%s\n' "$line" >> "$tmp" ;;
+    esac
+  done < "$file"
+  [[ "$wrote_version" == 'yes' ]] || printf 'wsp.config.version=%s\n' "$CONFIG_SCHEMA_VERSION" >> "$tmp"
+  [[ "$wrote_root" == 'yes' ]] || printf 'workspace.root=%s\n' "$expected_root" >> "$tmp"
+
+  if parse_config "$tmp" "$expected_root"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  if [[ "$rc" -ne 0 ]]; then
+    rm -f "$tmp"
+    fail "RECONCILED_CONFIG_INVALID:$CONFIG_REASON"
+  fi
+  mv "$tmp" "$file" || { rm -f "$tmp"; fail 'ATOMIC_REPLACE_FAILED'; }
+  RECONCILE_RESULT='RECONCILED'
+  return 0
+}
+
+active_workspace_root() {
+  local bound resolved
+  bound="$(read_binding 2>/dev/null || true)"
+  [[ -n "$bound" ]] || return 1
+  [[ -d "$bound" ]] || return 2
+  resolved="$(canonical_dir "$bound" 2>/dev/null || true)"
+  [[ -n "$resolved" ]] || return 2
+  printf '%s\n' "$resolved"
+}
+
+require_active_workspace() {
+  local bound resolved
+  bound="$(read_binding 2>/dev/null || true)"
+  [[ -n "$bound" ]] || fail 'WORKSPACE_NOT_INITIALIZED'
+  [[ -d "$bound" ]] || fail "CONFIGURED_WORKSPACE_ROOT_NOT_DIRECTORY:$bound"
+  resolved="$(canonical_dir "$bound" 2>/dev/null || true)"
+  [[ -n "$resolved" ]] || fail "CONFIGURED_WORKSPACE_ROOT_RESOLUTION_FAILED:$bound"
+  printf '%s\n' "$resolved"
+}
+
+config_summary() {
+  local root file rc
+  root="$1"
+  file="$root/$CONFIG_BASENAME"
+  if parse_config "$file" "$root"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  printf 'CONFIG_FILE: %s\n' "$file"
+  printf 'CONFIG_SCHEMA_SUPPORTED: %s\n' "$CONFIG_SCHEMA_VERSION"
+  printf 'CONFIG_VERSION: %s\n' "${CONFIG_VERSION:-UNKNOWN}"
+  printf 'WORKSPACE_ROOT: %s\n' "${CONFIG_ROOT:-UNKNOWN}"
+  printf 'UNKNOWN_PROPERTIES: %s\n' "$CONFIG_UNKNOWN_COUNT"
+  printf 'CONFIG_STATE: %s\n' "$CONFIG_STATE"
+  printf 'CONFIG_REASON: %s\n' "$CONFIG_REASON"
+  return "$rc"
+}
+
 inspect_repo() {
   local path="$1" heading="$2"
   local root head branch tree remote upstream ahead behind counts
@@ -84,23 +386,16 @@ inspect_repo() {
 
   root="$(git_ro -C "$path" rev-parse --show-toplevel 2>/dev/null || true)"
   [[ -n "$root" ]] || fail "NOT_A_GIT_WORKSPACE_COPY:$path"
-  root="$(cd -P "$root" >/dev/null 2>&1 && pwd)"
+  root="$(canonical_dir "$root")"
 
   head="$(git_ro -C "$root" rev-parse HEAD 2>/dev/null || printf 'UNKNOWN')"
   branch="$(git_ro -C "$root" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'DETACHED')"
-  if [[ -n "$(git_ro -C "$root" status --porcelain=v1 --untracked-files=normal 2>/dev/null || true)" ]]; then
-    tree="DIRTY"
-  else
-    tree="CLEAN"
-  fi
-
+  if [[ -n "$(git_ro -C "$root" status --porcelain=v1 --untracked-files=normal 2>/dev/null || true)" ]]; then tree='DIRTY'; else tree='CLEAN'; fi
   remote="$(git_ro -C "$root" remote get-url origin 2>/dev/null || printf 'NONE')"
-  [[ "$remote" == "NONE" ]] || remote="$(sanitize_remote "$remote")"
-
+  [[ "$remote" == 'NONE' ]] || remote="$(sanitize_remote "$remote")"
   upstream="$(git_ro -C "$root" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || printf 'NONE')"
-  ahead="UNKNOWN"
-  behind="UNKNOWN"
-  if [[ "$upstream" != "NONE" ]]; then
+  ahead='UNKNOWN'; behind='UNKNOWN'
+  if [[ "$upstream" != 'NONE' ]]; then
     counts="$(git_ro -C "$root" rev-list --left-right --count "$upstream...HEAD" 2>/dev/null || true)"
     if [[ -n "$counts" ]]; then
       behind="${counts%%[[:space:]]*}"
@@ -124,52 +419,262 @@ inspect_repo() {
 }
 
 cmd_version() {
+  detect_platform
   printf 'Workspace Ops\n'
   printf 'PRODUCT_VERSION: %s\n' "$PRODUCT_VERSION"
   printf 'CLI: wsp\n'
   printf 'IMPLEMENTATION: Bash\n'
   printf 'SOURCE_ROOT: %s\n' "$WSP_ROOT"
   printf 'SOURCE_REVISION: %s\n' "$(product_revision)"
+  printf 'PLATFORM_FAMILY: %s\n' "$PLATFORM_FAMILY"
+  printf 'PLATFORM_ENVIRONMENT: %s\n' "$PLATFORM_ENVIRONMENT"
+}
+
+cmd_init() {
+  local candidate="${1:-.}" root file result='CREATED' before_binding rc
+  require_supported_platform
+  root="$(canonical_dir "$candidate" 2>/dev/null || true)"
+  [[ -n "$root" ]] || fail "WORKSPACE_ROOT_NOT_DIRECTORY:$candidate"
+  file="$root/$CONFIG_BASENAME"
+
+  if [[ ! -e "$file" ]]; then
+    {
+      printf 'wsp.config.version=%s\n' "$CONFIG_SCHEMA_VERSION"
+      printf 'workspace.root=%s\n' "$root"
+    } | write_atomic_from_stdin "$file"
+    if parse_config "$file" "$root"; then
+      rc=0
+    else
+      rc=$?
+    fi
+    [[ "$rc" -eq 0 ]] || fail "WRITTEN_CONFIG_INVALID:$CONFIG_REASON"
+  elif [[ -f "$file" ]]; then
+    reconcile_config_file "$file" "$root"
+    case "$RECONCILE_RESULT" in
+      RECONCILED) result='RECONCILED' ;;
+      NO_CHANGE_REQUIRED) result='PRESERVED' ;;
+      *) fail 'CONFIG_RECONCILE_RESULT_UNKNOWN' ;;
+    esac
+  else
+    fail "CONFIG_PATH_NOT_REGULAR_FILE:$file"
+  fi
+
+  before_binding="$(read_binding 2>/dev/null || true)"
+  write_binding "$root"
+  printf 'WORKSPACE OPS INIT\n'
+  printf 'RESULT: %s\n' "$result"
+  printf 'WORKSPACE_ROOT: %s\n' "$root"
+  printf 'CONFIG_FILE: %s\n' "$file"
+  printf 'CONFIG_SCHEMA: %s\n' "$CONFIG_SCHEMA_VERSION"
+  if [[ -z "$before_binding" ]]; then
+    printf 'WORKSPACE_BINDING: CREATED\n'
+  elif [[ "$before_binding" == "$root" ]]; then
+    printf 'WORKSPACE_BINDING: PRESERVED\n'
+  else
+    printf 'WORKSPACE_BINDING: UPDATED_BY_EXPLICIT_INIT\n'
+  fi
+  printf 'GIT_MUTATION: NONE\n'
+  printf 'STATUS: PASS\n'
+}
+
+cmd_config_show() {
+  local root rc
+  root="$(require_active_workspace)"
+  printf 'WORKSPACE OPS CONFIG\n'
+  if config_summary "$root"; then rc=0; else rc=$?; fi
+  [[ "$rc" -eq 0 ]] || exit 2
+  printf 'STATUS: PASS\n'
+}
+
+cmd_config_validate() {
+  local root rc
+  root="$(require_active_workspace)"
+  printf 'WORKSPACE OPS CONFIG VALIDATE\n'
+  if config_summary "$root"; then rc=0; else rc=$?; fi
+  case "$rc" in
+    0) printf 'RESULT: VALID\nSTATUS: PASS\n' ;;
+    3) printf 'RESULT: RECONCILE_REQUIRED\nSTATUS: BLOCKED\n'; exit 2 ;;
+    *) printf 'RESULT: INVALID\nSTATUS: BLOCKED\n'; exit 2 ;;
+  esac
+}
+
+cmd_config_reconcile() {
+  local root file
+  require_supported_platform
+  root="$(require_active_workspace)"
+  file="$root/$CONFIG_BASENAME"
+  reconcile_config_file "$file" "$root"
+  printf 'WORKSPACE OPS CONFIG RECONCILE\n'
+  printf 'CONFIG_FILE: %s\n' "$file"
+  printf 'WORKSPACE_ROOT: %s\n' "$root"
+  printf 'RESULT: %s\n' "$RECONCILE_RESULT"
+  printf 'UNKNOWN_PROPERTIES: %s\n' "$CONFIG_UNKNOWN_COUNT"
+  printf 'STATUS: PASS\n'
+}
+
+path_contains_dir() {
+  local dir="$1" entry
+  local old_ifs="$IFS"
+  IFS=':'
+  for entry in ${PATH:-}; do
+    [[ "$entry" == "$dir" ]] && { IFS="$old_ifs"; return 0; }
+  done
+  IFS="$old_ifs"
+  return 1
+}
+
+same_product_executable() {
+  local candidate="$1" resolved
+  [[ -e "$candidate" || -L "$candidate" ]] || return 1
+  resolved="$(resolve_source "$candidate" 2>/dev/null || true)"
+  [[ -n "$resolved" && "$resolved" == "$SOURCE_PATH" ]]
+}
+
+cmd_bootstrap() {
+  local bin_dir='' existing='' target resolved
+  require_supported_platform
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --bin-dir)
+        shift
+        [[ $# -gt 0 ]] || fail 'USAGE:bootstrap --bin-dir DIR'
+        bin_dir="$1"
+        ;;
+      *) fail 'USAGE:bootstrap [--bin-dir DIR]' ;;
+    esac
+    shift
+  done
+
+  if [[ -z "$bin_dir" ]]; then
+    [[ -n "${HOME:-}" ]] || fail 'HOME_UNAVAILABLE'
+    bin_dir="$HOME/.local/bin"
+  fi
+  case "$bin_dir" in /*) ;; *) fail 'BIN_DIR_MUST_BE_ABSOLUTE' ;; esac
+  path_contains_dir "$bin_dir" || fail "BIN_DIR_NOT_ON_PATH:$bin_dir"
+
+  existing="$(command -v wsp 2>/dev/null || true)"
+  if [[ -n "$existing" ]] && ! same_product_executable "$existing"; then
+    fail "UNRELATED_WSP_COMMAND_EXISTS:$existing"
+  fi
+
+  mkdir -p "$bin_dir"
+  [[ -d "$bin_dir" ]] || fail "BIN_DIR_NOT_DIRECTORY:$bin_dir"
+  target="$bin_dir/wsp"
+  if [[ -e "$target" || -L "$target" ]]; then
+    if same_product_executable "$target"; then
+      printf 'WORKSPACE OPS BOOTSTRAP\nRESULT: NO_CHANGE_REQUIRED\nCOMMAND_PATH: %s\nSTATUS: PASS\n' "$target"
+      return 0
+    fi
+    fail "TARGET_WSP_EXISTS:$target"
+  fi
+
+  ln -s "$SOURCE_PATH" "$target" || fail 'COMMAND_REGISTRATION_FAILED'
+  hash -r 2>/dev/null || true
+  resolved="$(command -v wsp 2>/dev/null || true)"
+  if [[ -z "$resolved" ]] || ! same_product_executable "$resolved"; then
+    rm -f "$target"
+    fail 'COMMAND_REGISTRATION_VERIFICATION_FAILED'
+  fi
+  printf 'WORKSPACE OPS BOOTSTRAP\n'
+  printf 'RESULT: REGISTERED\n'
+  printf 'COMMAND_PATH: %s\n' "$target"
+  printf 'SOURCE: %s\n' "$SOURCE_PATH"
+  printf 'STATUS: PASS\n'
+}
+
+cmd_status() {
+  local root file rc
+  if [[ ! -f "$(binding_file)" ]]; then
+    printf 'WORKSPACE_BINDING: UNCONFIGURED\n'
+    printf 'INSPECTION_SCOPE: CURRENT_DIRECTORY_FALLBACK\n'
+    printf 'CURRENT_DIRECTORY_IS_NOT_WORKSPACE_AUTHORITY: YES\n'
+    inspect_repo '.' 'WORKSPACE STATUS'
+    return 0
+  fi
+  root="$(require_active_workspace)"
+  file="$root/$CONFIG_BASENAME"
+  if parse_config "$file" "$root"; then rc=0; else rc=$?; fi
+  [[ "$rc" -eq 0 ]] || fail "CONFIG_INVALID:$CONFIG_REASON"
+
+  printf 'WORKSPACE STATUS\n'
+  printf 'WORKSPACE_BINDING: CONFIGURED\n'
+  printf 'WORKSPACE_ROOT: %s\n' "$root"
+  printf 'CONFIG_FILE: %s\n' "$file"
+  printf 'CONFIG_VERSION: %s\n' "$CONFIG_VERSION"
+  if command -v git >/dev/null 2>&1 && git_ro -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    inspect_repo "$root" 'CONFIGURED WORKSPACE GIT INSPECTION'
+  else
+    printf 'WORKSPACE_ROOT_GIT: NO\n'
+    printf 'GIT_INSPECTION: NOT_APPLICABLE\n'
+    printf 'AUTHORITY: CONFIGURED_WORKSPACE_ROOT\n'
+  fi
 }
 
 cmd_doctor() {
-  local blocked=0 dep label
+  local blocked=0 dep label root='' file='' rc registered=''
+  detect_platform
   printf 'WORKSPACE OPS DOCTOR\n'
   printf 'PRODUCT_VERSION: %s\n' "$PRODUCT_VERSION"
   printf 'BASH_VERSION: %s\n' "${BASH_VERSION:-UNKNOWN}"
+  printf 'PLATFORM_FAMILY: %s\n' "$PLATFORM_FAMILY"
+  printf 'PLATFORM_ENVIRONMENT: %s\n' "$PLATFORM_ENVIRONMENT"
+  printf 'PLATFORM_OS: %s\n' "$PLATFORM_OS"
+  printf 'PLATFORM_ARCH: %s\n' "$PLATFORM_ARCH"
+  printf 'PLATFORM_SUPPORT: %s\n' "$PLATFORM_SUPPORT"
+  case "$PLATFORM_SUPPORT" in SUPPORTED) ;; *) blocked=$((blocked + 1)) ;; esac
 
-  for dep in git readlink; do
+  for dep in git readlink uname mktemp mv mkdir ln; do
     case "$dep" in
-      git) label='GIT' ;;
-      readlink) label='READLINK' ;;
-      *) label="$dep" ;;
+      git) label='GIT' ;; readlink) label='READLINK' ;; uname) label='UNAME' ;; mktemp) label='MKTEMP' ;; mv) label='MV' ;; mkdir) label='MKDIR' ;; ln) label='LN' ;; *) label="$dep" ;;
     esac
-    if command -v "$dep" >/dev/null 2>&1; then
-      printf 'DEPENDENCY_%s: AVAILABLE\n' "$label"
-    else
-      printf 'DEPENDENCY_%s: MISSING\n' "$label"
-      blocked=$((blocked + 1))
-    fi
+    if command -v "$dep" >/dev/null 2>&1; then printf 'DEPENDENCY_%s: AVAILABLE\n' "$label"; else printf 'DEPENDENCY_%s: MISSING\n' "$label"; blocked=$((blocked + 1)); fi
   done
 
-  if [[ -f "$VERSION_FILE" ]]; then
-    printf 'PRODUCT_LAYOUT: PASS\n'
+  if [[ -f "$VERSION_FILE" ]]; then printf 'PRODUCT_LAYOUT: PASS\n'; else printf 'PRODUCT_LAYOUT: BLOCKED\n'; blocked=$((blocked + 1)); fi
+
+  if [[ ! -f "$(binding_file)" ]]; then
+    printf 'WORKSPACE_CONFIGURATION: ABSENT\n'
+    blocked=$((blocked + 1))
   else
-    printf 'PRODUCT_LAYOUT: BLOCKED\n'
+    root="$(read_binding 2>/dev/null || true)"
+    if [[ -z "$root" ]]; then
+      printf 'WORKSPACE_CONFIGURATION: INVALID_BINDING\n'
+      printf 'CONFIG_REASON: EMPTY_WORKSPACE_BINDING\n'
+      blocked=$((blocked + 1))
+    elif [[ ! -d "$root" ]]; then
+      printf 'WORKSPACE_CONFIGURATION: BROKEN_BINDING\n'
+      printf 'WORKSPACE_ROOT: %s\n' "$root"
+      printf 'CONFIG_REASON: CONFIGURED_WORKSPACE_ROOT_NOT_DIRECTORY\n'
+      blocked=$((blocked + 1))
+    else
+      root="$(canonical_dir "$root")"
+      printf 'WORKSPACE_CONFIGURATION: PRESENT\n'
+      printf 'WORKSPACE_ROOT: %s\n' "$root"
+      file="$root/$CONFIG_BASENAME"
+      if parse_config "$file" "$root"; then rc=0; else rc=$?; fi
+      printf 'CONFIG_VERSION: %s\n' "${CONFIG_VERSION:-UNKNOWN}"
+      printf 'CONFIG_STATE: %s\n' "$CONFIG_STATE"
+      printf 'CONFIG_REASON: %s\n' "$CONFIG_REASON"
+      [[ "$rc" -eq 0 ]] || blocked=$((blocked + 1))
+    fi
+  fi
+
+  registered="$(command -v wsp 2>/dev/null || true)"
+  if [[ -z "$registered" ]]; then
+    printf 'COMMAND_REGISTRATION: ABSENT\n'
+    blocked=$((blocked + 1))
+  elif same_product_executable "$registered"; then
+    printf 'COMMAND_REGISTRATION: PASS\n'
+    printf 'COMMAND_PATH: %s\n' "$registered"
+  else
+    printf 'COMMAND_REGISTRATION: CONFLICT\n'
+    printf 'COMMAND_PATH: %s\n' "$registered"
     blocked=$((blocked + 1))
   fi
 
-  if command -v git >/dev/null 2>&1 && git_ro rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    printf 'CURRENT_DIRECTORY_GIT: YES\n'
-  else
-    printf 'CURRENT_DIRECTORY_GIT: NO\n'
-  fi
-
   printf 'NETWORK_MUTATION: NONE\n'
-  if [[ "$blocked" -gt 0 ]]; then
-    printf 'OVERALL: BLOCKED\n'
-    exit 2
-  fi
+  printf 'MANAGED_GIT_MUTATION: NONE\n'
+  if [[ "$blocked" -gt 0 ]]; then printf 'OVERALL: BLOCKED\n'; exit 2; fi
   printf 'OVERALL: PASS\n'
 }
 
@@ -181,13 +686,30 @@ case "$COMMAND" in
     [[ $# -eq 0 ]] || fail 'USAGE:version'
     cmd_version
     ;;
+  init)
+    [[ $# -le 1 ]] || fail 'USAGE:init [workspace-root]'
+    cmd_init "${1:-.}"
+    ;;
   status)
     [[ $# -eq 0 ]] || fail 'USAGE:status'
-    inspect_repo "." "WORKSPACE STATUS"
+    cmd_status
     ;;
   doctor)
     [[ $# -eq 0 ]] || fail 'USAGE:doctor'
     cmd_doctor
+    ;;
+  config)
+    sub="${1:-}"
+    [[ $# -eq 0 ]] || shift
+    case "$sub" in
+      show) [[ $# -eq 0 ]] || fail 'USAGE:config show'; cmd_config_show ;;
+      validate) [[ $# -eq 0 ]] || fail 'USAGE:config validate'; cmd_config_validate ;;
+      reconcile) [[ $# -eq 0 ]] || fail 'USAGE:config reconcile'; cmd_config_reconcile ;;
+      *) fail 'USAGE:config {show|validate|reconcile}' ;;
+    esac
+    ;;
+  bootstrap)
+    cmd_bootstrap "$@"
     ;;
   repo)
     sub="${1:-}"
@@ -195,14 +717,12 @@ case "$COMMAND" in
     case "$sub" in
       inspect)
         [[ $# -le 1 ]] || fail 'USAGE:repo inspect [path]'
-        inspect_repo "${1:-.}" "WORKSPACE REPOSITORY INSPECT"
+        inspect_repo "${1:-.}" 'WORKSPACE REPOSITORY INSPECT'
         ;;
       *) fail 'USAGE:repo inspect [path]' ;;
     esac
     ;;
-  help|-h|--help)
-    usage
-    ;;
+  help|-h|--help) usage ;;
   *)
     printf 'ERROR: unknown command: %s\n' "$COMMAND" >&2
     usage >&2

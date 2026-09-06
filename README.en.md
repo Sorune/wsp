@@ -2,95 +2,138 @@
 
 [한국어](./README.md) · [English](./README.en.md)
 
-> A Bash-first developer tool for reconciling a logical development workspace with its physical Git and execution state.
+> A Bash-first developer tool for reconciling an explicit logical Workspace with physical Git and execution state.
 
-Workspace Ops is a public product for observing and explaining the gap between a developer's **logical workspace** and the filesystem, Git repository, checkout/worktree, machine, and revision state where development actually happens.
+Workspace Ops is a public Product that binds one explicitly selected **logical Workspace Root** and reconciles that context with filesystem, Git repository, checkout/worktree, machine, and revision state.
 
 ```text
-Logical Workspace
+Configured Logical Workspace
         ↕
 Reconciliation
         ↕
-Physical Workspace / Execution State
+Physical Workspace / Git State
 ```
 
-The initial Product is intentionally **READ-ONLY / GIT-FIRST / BASH-FIRST**.
+P0 is **GIT-FIRST / BASH-FIRST** and remains read-only toward managed Git repositories. P0D permits explicit mutation only for Product installation and Product configuration state.
 
-## Product boundary
-
-Workspace Ops does not replace Git.
+## Workspace binding
 
 ```text
-Git
-= repository / revision / branch / worktree mechanics
+ONE WSP CONTEXT
+= ONE EXPLICITLY CONFIGURED WORKSPACE ROOT
 
-Workspace Ops
-= context / relations / reconciliation around those mechanics
+OS is detected.
+Workspace is configured.
+Configuration is preserved.
+Product update does not reset user state.
 ```
 
-The initial Product directly observes a small core:
+`wsp init [workspace-root]` explicitly selects the Workspace Root. Omitting the argument uses the current directory only as an initialization candidate; ordinary cwd state is not Workspace authority.
 
-- Repository
-- Workspace Copy
-- Machine
-- Revision
+Workspace-local configuration:
 
-Project, Session, Acceptance Binding, Agent Governance, and broader observability remain gated follow-on capabilities.
+```text
+<workspace-root>/.wsp.properties
+```
+
+Initial schema:
+
+```properties
+wsp.config.version=1
+workspace.root=/resolved/absolute/path
+```
+
+The active user-context binding is stored at `${XDG_CONFIG_HOME:-$HOME/.config}/wsp/workspace-root`. Tests or isolated environments may override that location with `WSP_STATE_HOME`.
 
 ## CLI
 
-The preferred short executable is `wsp`.
-
 ```bash
 wsp version
+wsp init [workspace-root]
 wsp status
 wsp doctor
+wsp config show
+wsp config validate
+wsp config reconcile
+wsp bootstrap [--bin-dir DIR]
 wsp repo inspect [path]
 ```
 
-Current commands are observational. They do not fetch, pull, reset, clean, repair, deploy, or otherwise mutate the inspected repository.
+Git inspection never performs fetch, pull, reset, clean, checkout mutation, or repository relocation.
 
 ## Quick start
 
-Run directly from a repository checkout:
+From a Product checkout:
 
 ```bash
 ./bin/wsp version
-./bin/wsp doctor
-./bin/wsp status
-./bin/wsp repo inspect .
+./bin/wsp init /path/to/workspace
 ```
 
-A PATH entry may point to the checkout through a symlink:
+Register the Product executable in a user bin directory that is already on `PATH`:
 
 ```bash
-ln -s /path/to/wsp/bin/wsp ~/.local/bin/wsp
+export PATH="$HOME/.local/bin:$PATH"
+./bin/wsp bootstrap
 wsp version
+wsp doctor
 ```
 
-Installer automation and release packaging are not stable contracts yet. Installation must not silently overwrite an unrelated existing `wsp` executable.
+Bootstrap never silently overwrites an unrelated existing `wsp` executable. A shell alias is not a required installation mechanism.
 
-## Bash-first policy
-
-Bash is the initial first-class Product implementation, not disposable prototype code.
+## Configuration lifecycle
 
 ```text
-Bash-first
-!= Bash-temporary
+CONFIG ABSENT
+→ create
+→ validate
+
+CONFIG EXISTS
+→ parse
+→ validate
+→ reconcile only supported missing/older schema fields
+→ preserve user values
 ```
 
-Workspace Ops may remain Bash-based for as long as Bash remains the simplest correct implementation of the Product contract. A Go, Rust, or other native component should be introduced only after demonstrated implementation pressure justifies it.
+Invariants:
+
+```text
+CONFIG EXISTS != TEMPLATE OVERWRITE
+EXISTING USER VALUE > NEW PRODUCT DEFAULT
+UNKNOWN PROPERTY != JUNK
+INVALID != SILENTLY REPLACE
+PRODUCT VERSION != CONFIG VERSION
+```
+
+Schema 1 explicitly reconciles unversioned/v0 configuration to v1. Unsupported newer schema versions, invalid roots, or duplicate required properties are diagnosed and blocked without silent replacement.
+
+## Platform boundary
+
+Current CI-verified mutation paths:
+
+```text
+Linux Bash: SUPPORTED
+macOS Bash: SUPPORTED
+```
+
+Windows environments are detected without advancing an unsupported compatibility claim:
+
+```text
+WSL Bash: detected / UNVERIFIED
+Git Bash: detected / UNSUPPORTED
+native PowerShell: outside this Bash implementation
+```
+
+P0D does not claim Windows init/reconcile/bootstrap support before physical acceptance.
 
 ## Reference / Product / Lab
-
-Workspace Ops separates different authority scopes:
 
 ```text
 Workspace Ops Reference
 = semantics / invariants / conformance expectations
 
 Workspace Ops Product (this repository)
-= CLI / runtime behavior / serialization / releases
+= CLI / runtime behavior / serialization / compatibility / releases
 
 Private Lab
 = dogfooding / experiments / private operational truth
@@ -99,11 +142,10 @@ Private Lab
 Reference: [Sorune/workspace-ops-public](https://github.com/Sorune/workspace-ops-public)
 
 ```text
-PRIVATE EXPERIENCE
-!= AUTOMATIC PUBLIC AUTHORITY
+PRIVATE EXPERIENCE != AUTOMATIC PUBLIC AUTHORITY
 ```
 
-Private Lab implementation is not copied into this repository. Validated behavior is generalized and reimplemented against the Product boundary.
+Sorune-specific paths, machines, projects, aliases, and private topology are not copied into the Product.
 
 ## Current maturity
 
@@ -111,20 +153,22 @@ Private Lab implementation is not copied into this repository. Validated behavio
 Product: Workspace Ops
 CLI: wsp
 Implementation: Bash
-Scope: read-only / Git-first
-Phase: P0
+Source control: Git-first
+Workspace model: one explicit Workspace Root
+Config schema: 1
+Managed Git mutation: NOT IMPLEMENTED
+Project/Session/Agent Governance: DEFERRED
 Stable CLI/schema compatibility: NOT YET FROZEN
-Mutation/orchestration: NOT IMPLEMENTED
 ```
 
 ## Development
 
 ```bash
-bash -n bin/wsp
+bash -n bin/wsp tests/selftest.sh
 bash tests/selftest.sh
 ```
 
-CI validates the minimum Product behavior on Linux and macOS.
+CI validates bootstrap/configuration lifecycle and the existing read-only Git behavior on Linux and macOS.
 
 ## License
 
