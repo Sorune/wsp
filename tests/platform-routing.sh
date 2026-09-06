@@ -9,6 +9,7 @@ PASS=0
 FAIL=0
 
 ok() { PASS=$((PASS + 1)); printf 'PASS: %s\n' "$1"; }
+skip_test() { printf 'SKIP: %s\n' "$1"; }
 fail_test() { FAIL=$((FAIL + 1)); printf 'FAIL: %s\n' "$1" >&2; [[ -z "${2:-}" ]] || printf '%s\n' "$2" >&2; }
 contains() {
   local text="$1" needle="$2" label="$3"
@@ -83,11 +84,17 @@ contains "$out" 'PLATFORM_ENVIRONMENT: native-bash' 'macOS Bash Product path cla
 out="$(run_doctor Darwin arm64 no macos-doctor)"
 contains "$out" 'PLATFORM_SUPPORT: SUPPORTED' 'macOS support claim'
 
-out="$(run_version Linux x86_64 yes wsl-version)"
-contains "$out" 'PLATFORM_FAMILY: Windows' 'WSL Windows family classification'
-contains "$out" 'PLATFORM_ENVIRONMENT: WSL-Bash' 'WSL explicit environment classification'
-out="$(run_doctor Linux x86_64 yes wsl-doctor)"
-contains "$out" 'PLATFORM_SUPPORT: UNVERIFIED_WSL_BASH' 'WSL remains unverified'
+WSL_FIXTURE_AVAILABLE='no'
+if [[ -r /proc/version ]]; then
+  WSL_FIXTURE_AVAILABLE='yes'
+  out="$(run_version Linux x86_64 yes wsl-version)"
+  contains "$out" 'PLATFORM_FAMILY: Windows' 'WSL Windows family classification'
+  contains "$out" 'PLATFORM_ENVIRONMENT: WSL-Bash' 'WSL explicit environment classification'
+  out="$(run_doctor Linux x86_64 yes wsl-doctor)"
+  contains "$out" 'PLATFORM_SUPPORT: UNVERIFIED_WSL_BASH' 'WSL remains unverified'
+else
+  skip_test 'WSL classification fixture requires readable /proc/version and is covered by Linux CI'
+fi
 
 out="$(run_version MINGW64_NT-10.0 x86_64 no gitbash-version)"
 contains "$out" 'PLATFORM_FAMILY: Windows' 'Git Bash Windows family classification'
@@ -124,7 +131,11 @@ assert_bootstrap_blocked() {
   [[ "$(cat "$home/.bashrc")" == '# keep me' ]] && ok "$name leaves shell rc unchanged" || fail_test "$name leaves shell rc unchanged" "$(cat "$home/.bashrc")"
 }
 
-assert_bootstrap_blocked 'WSL' Linux yes 'UNSUPPORTED_PLATFORM:Linux:WSL-Bash'
+if [[ "$WSL_FIXTURE_AVAILABLE" == 'yes' ]]; then
+  assert_bootstrap_blocked 'WSL' Linux yes 'UNSUPPORTED_PLATFORM:Linux:WSL-Bash'
+else
+  skip_test 'WSL bootstrap fail-closed fixture is covered by Linux CI'
+fi
 assert_bootstrap_blocked 'Git Bash' MINGW64_NT-10.0 no 'UNSUPPORTED_PLATFORM:MINGW64_NT-10.0:Git-Bash'
 assert_bootstrap_blocked 'unknown OS' Haiku no 'UNSUPPORTED_PLATFORM:Haiku:unknown'
 
