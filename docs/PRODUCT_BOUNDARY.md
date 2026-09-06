@@ -7,7 +7,8 @@ Status: P0D / PROVISIONAL PRODUCT CONTRACT
 ```text
 Product: Workspace Ops
 CLI: wsp
-Implementation: Bash
+Core implementation: Bash-first
+Windows native invocation: thin launcher/PowerShell adapter
 Source-control implementation: Git-first
 Workspace model: one explicitly configured Workspace Root
 ```
@@ -69,6 +70,7 @@ P0D permits only Product-self/configuration mutation:
 create/reconcile .wsp.properties
 write active Workspace binding
 register Product launcher/symlink
+register Product command directory in user PATH
 ```
 
 This does not authorize managed repository mutation.
@@ -95,22 +97,48 @@ deployment
 
 ## Platform boundary
 
-Runtime detection distinguishes Linux, macOS, and Windows-related Bash environments.
-
-Current supported mutation paths are only the environments validated by Product CI:
+Platform routing distinguishes host platform, terminal surface, and compatibility environment.
 
 ```text
-Linux Bash: SUPPORTED
+Linux native Bash: SUPPORTED
 macOS Bash: SUPPORTED
+
+Windows native host:
+  terminal surfaces = CMD / PowerShell
+  public command = wsp
+  implementation = wsp.cmd -> PowerShell adapter -> Git-for-Windows Bash -> shared Bash core
+  support state = IMPLEMENTED / CI VERIFIED
+  physical Windows acceptance = PENDING
+
 WSL Bash: DETECTED / UNVERIFIED
-Git Bash: DETECTED / UNSUPPORTED
-native PowerShell: NOT THIS IMPLEMENTATION
+Git Bash direct invocation: DETECTED / UNSUPPORTED
+Unknown OS: UNSUPPORTED
 ```
 
+CMD and PowerShell are not separate Workspace Ops Products. They expose the same `wsp` command from the normal Windows User PATH.
+
+The Bash runtime shipped with Git for Windows is an internal adapter dependency on the Windows native route. Its use does not promote direct Git Bash invocation to supported status.
+
 ```text
-IMPLEMENTATION PATH EXISTS
-!= SUPPORTED PLATFORM CLAIM
+BASH-FIRST
+!= BASH-ONLY INVOCATION SURFACE
+
+INTERNAL RUNTIME ADAPTER
+!= USER TERMINAL ENVIRONMENT
 ```
+
+Windows native support must not be promoted beyond `IMPLEMENTED / CI VERIFIED` until a physical Windows host passes the separate acceptance gate.
+
+## Provider boundary
+
+Terminal-based tools such as Codex CLI or Claude CLI may discover `wsp` through the normal host PATH. This gate does not create provider-specific session identity.
+
+```text
+COMMAND AVAILABILITY
+!= PROVIDER IDENTITY BINDING
+```
+
+No `CODEX_THREAD_ID`, Claude session identifier, or provider-native identity logic belongs in P0D3-R1 platform routing.
 
 ## Safety invariants
 
@@ -142,6 +170,8 @@ Reference: https://github.com/Sorune/workspace-ops-public
 PRIVATE EXPERIENCE != AUTOMATIC PUBLIC AUTHORITY
 ```
 
+Private Windows operational code may be used as implementation evidence, but private paths, repository URLs, project topology, session policy, and machine assumptions are not Product authority and must not be copied.
+
 ## Deferred from P0D
 
 ```text
@@ -155,7 +185,9 @@ central daemon
 distributed lease/locking
 deployment mutation
 generic VCS support
-native Windows implementation
+full native PowerShell rewrite
+provider-specific terminal/session identity binding
+physical Windows support promotion
 ```
 
 These require separate evidence and authorization gates.

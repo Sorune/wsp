@@ -16,6 +16,11 @@ Physical Workspace / Git State
 
 P0 is **GIT-FIRST / BASH-FIRST** and remains read-only toward managed Git repositories. P0D permits explicit mutation only for Product installation and Product configuration state.
 
+```text
+BASH-FIRST
+!= BASH-ONLY INVOCATION SURFACE
+```
+
 ## Workspace binding
 
 ```text
@@ -47,7 +52,7 @@ The active user-context binding is stored at `${XDG_CONFIG_HOME:-$HOME/.config}/
 
 ## CLI
 
-```bash
+```text
 wsp version
 wsp init [workspace-root]
 wsp status
@@ -61,7 +66,7 @@ wsp repo inspect [path]
 
 Git inspection never performs fetch, pull, reset, clean, checkout mutation, or repository relocation.
 
-## Quick start
+## Quick start — Linux/macOS
 
 From a Product checkout:
 
@@ -86,15 +91,68 @@ wsp version
 wsp doctor
 ```
 
-Persistent PATH changes are limited to the managed marker block; unrelated shell rc content is preserved.
+## Quick start — Windows native
 
-```text
-# >>> wsp managed path >>>
-...
-# <<< wsp managed path <<<
+CMD and PowerShell are two terminal surfaces for the same Windows-native `wsp` command.
+
+Initial installation from a Product checkout in PowerShell:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap-windows.ps1
 ```
 
-Bootstrap never silently overwrites an unrelated existing `wsp` executable. Existing valid Product registration and the managed PATH block are preserved on repeated bootstrap. A shell alias is not a required installation mechanism.
+If `pwsh` is unavailable but Windows PowerShell is present, the same script can be run with `powershell.exe`.
+
+Default command directory:
+
+```text
+%USERPROFILE%\.local\bin
+```
+
+The Windows bootstrap installs a Product-owned `wsp.cmd` launcher and appends the directory to the Windows User PATH only when absent. Existing User PATH content is preserved. After a PATH change, open a new terminal and verify:
+
+```text
+CMD> where wsp
+CMD> wsp version
+
+PS> Get-Command wsp
+PS> wsp version
+```
+
+Windows native routing is:
+
+```text
+Windows native terminal
+→ wsp.cmd
+→ thin PowerShell adapter
+→ Git-for-Windows Bash runtime
+→ shared bin/wsp Product core
+```
+
+CMD and PowerShell therefore do not become separate Products. Git-for-Windows Bash is an internal runtime adapter; it is distinct from the user directly invoking Workspace Ops from a Git Bash compatibility environment.
+
+Current Windows native status:
+
+```text
+IMPLEMENTED / CI VERIFIED
+PHYSICAL WINDOWS ACCEPTANCE: PENDING
+```
+
+The Product is not promoted to physical Windows PASS until a separate real-host gate is completed.
+
+## Installation safety
+
+Across supported installation routes:
+
+```text
+existing unrelated wsp
+→ NEVER overwrite silently
+
+existing Product wsp
+→ idempotent preserve/update
+```
+
+Windows modifies only Windows User PATH as needed. Linux/macOS modifies only the WSP-managed shell startup block as needed. A shell alias is not required.
 
 ## Configuration lifecycle
 
@@ -124,24 +182,35 @@ Schema 1 explicitly reconciles unversioned/v0 configuration to v1. Unsupported n
 
 ## Platform boundary
 
-Current CI-verified mutation paths:
+Current Product routing:
 
 ```text
-Linux Bash: SUPPORTED
+Linux native Bash: SUPPORTED
 macOS Bash: SUPPORTED
+
+Windows native host:
+  CMD / PowerShell terminal surfaces
+  IMPLEMENTED / CI VERIFIED
+  physical acceptance PENDING
+
+WSL Bash: detected / UNVERIFIED
+Git Bash direct invocation: detected / UNSUPPORTED
+unknown OS: UNSUPPORTED
 ```
 
-Command PATH persistence on Linux/macOS is verified for bash and zsh startup files.
-
-Windows environments are detected without advancing an unsupported compatibility claim:
+Using Git-for-Windows Bash internally does not promote direct Git Bash invocation to supported status.
 
 ```text
-WSL Bash: detected / UNVERIFIED
-Git Bash: detected / UNSUPPORTED
-native PowerShell: outside this Bash implementation
+INTERNAL RUNTIME ADAPTER
+!= USER TERMINAL ENVIRONMENT
 ```
 
-P0D does not claim Windows init/reconcile/bootstrap support before physical acceptance.
+Terminal tools such as Codex CLI or Claude CLI may discover `wsp` through the normal host PATH, but provider-specific session identity is outside this gate.
+
+```text
+COMMAND AVAILABILITY
+!= PROVIDER IDENTITY BINDING
+```
 
 ## Reference / Product / Lab
 
@@ -162,14 +231,15 @@ Reference: [Sorune/workspace-ops-public](https://github.com/Sorune/workspace-ops
 PRIVATE EXPERIENCE != AUTOMATIC PUBLIC AUTHORITY
 ```
 
-Sorune-specific paths, machines, projects, aliases, and private topology are not copied into the Product.
+Sorune-specific paths, machines, projects, aliases, private topology, and session policy are not copied into the Product.
 
 ## Current maturity
 
 ```text
 Product: Workspace Ops
 CLI: wsp
-Implementation: Bash
+Core implementation: Bash-first
+Windows native invocation: thin PowerShell adapter + wsp.cmd
 Source control: Git-first
 Workspace model: one explicit Workspace Root
 Config schema: 1
@@ -180,14 +250,23 @@ Stable CLI/schema compatibility: NOT YET FROZEN
 
 ## Development
 
+Linux/macOS:
+
 ```bash
-bash -n bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/selftest.sh
+bash -n bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/platform-routing.sh tests/selftest.sh
 bash tests/config-lifecycle.sh
 bash tests/path-registration.sh
+bash tests/platform-routing.sh
 bash tests/selftest.sh
 ```
 
-CI validates the configuration lifecycle, command/PATH registration, and existing read-only Git behavior on Linux and macOS.
+Windows native:
+
+```powershell
+./tests/windows-routing.ps1
+```
+
+CI validates existing Linux/macOS regression behavior together with the Windows-native CMD/PowerShell command surface.
 
 ## License
 
