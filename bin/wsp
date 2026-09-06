@@ -44,7 +44,7 @@ Commands:
   config show                          Show the active Workspace configuration summary.
   config validate                      Validate the active Workspace configuration without mutation.
   config reconcile                     Apply supported config-schema reconciliation while preserving user values.
-  bootstrap [--bin-dir DIR]            Register this Product executable as `wsp` on supported Bash platforms.
+  bootstrap [--bin-dir DIR]            Register `wsp` and persist PATH for supported bash/zsh shells.
   repo inspect [path]                  Inspect a Git repository/workspace copy without network mutation.
   help                                 Show this help.
 
@@ -530,8 +530,131 @@ same_product_executable() {
   [[ -n "$resolved" && "$resolved" == "$SOURCE_PATH" ]]
 }
 
+select_user_bin_dir() {
+  [[ -n "${HOME:-}" ]] || fail 'HOME_UNAVAILABLE'
+  if path_contains_dir "$HOME/.local/bin"; then
+    printf '%s\n' "$HOME/.local/bin"
+  elif path_contains_dir "$HOME/bin"; then
+    printf '%s\n' "$HOME/bin"
+  else
+    printf '%s\n' "$HOME/.local/bin"
+  fi
+}
+
+detect_user_shell() {
+  local shell_path="${WSP_SHELL:-${SHELL:-}}" shell_name
+  [[ -n "$shell_path" ]] || return 1
+  shell_name="${shell_path##*/}"
+  case "$shell_name" in
+    bash|zsh) printf '%s\n' "$shell_name" ;;
+    *) return 1 ;;
+  esac
+}
+
+shell_rc_file() {
+  local shell_name="$1"
+  if [[ -n "${WSP_SHELL_RC:-}" ]]; then
+    case "$WSP_SHELL_RC" in /*) printf '%s\n' "$WSP_SHELL_RC"; return 0 ;; *) fail 'SHELL_RC_MUST_BE_ABSOLUTE' ;; esac
+  fi
+  [[ -n "${HOME:-}" ]] || fail 'HOME_UNAVAILABLE'
+  case "$shell_name" in
+    zsh) printf '%s/.zshrc\n' "$HOME" ;;
+    bash)
+      detect_platform
+      if [[ "$PLATFORM_FAMILY" == 'macOS' ]]; then
+        printf '%s/.bash_profile\n' "$HOME"
+      else
+        printf '%s/.bashrc\n' "$HOME"
+      fi
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+escape_double_quoted_shell_value() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//\$/\\$}"
+  value="${value//\`/\\\`}"
+  printf '%s\n' "$value"
+}
+
+managed_path_assignment() {
+  local escaped
+  escaped="$(escape_double_quoted_shell_value "$1")"
+  printf 'WSP_MANAGED_BIN_DIR="%s"\n' "$escaped"
+}
+
+managed_path_block_state() {
+  local file="$1" bin_dir="$2" line desired in_block='no'
+  local begin_count=0 end_count=0 desired_count=0
+  [[ -f "$file" ]] || { printf 'ABSENT\n'; return 0; }
+  desired="$(managed_path_assignment "$bin_dir")"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      '# >>> wsp managed path >>>') begin_count=$((begin_count + 1)); in_block='yes' ;;
+      '# <<< wsp managed path <<<') end_count=$((end_count + 1)); in_block='no' ;;
+      *) [[ "$in_block" == 'yes' && "$line" == "$desired" ]] && desired_count=$((desired_count + 1)) ;;
+    esac
+  done < "$file"
+  if [[ "$begin_count" -eq 0 && "$end_count" -eq 0 ]]; then
+    printf 'ABSENT\n'
+  elif [[ "$begin_count" -eq 1 && "$end_count" -eq 1 && "$desired_count" -eq 1 ]]; then
+    printf 'PRESENT\n'
+  else
+    printf 'CONFLICT\n'
+  fi
+}
+
+append_managed_path_block() {
+  local file="$1" bin_dir="$2" dir assignment
+  case "$file" in */*) dir="${file%/*}" ;; *) dir='.' ;; esac
+  mkdir -p "$dir"
+  [[ ! -e "$file" || -f "$file" ]] || fail "SHELL_RC_NOT_REGULAR_FILE:$file"
+  assignment="$(managed_path_assignment "$bin_dir")"
+  {
+    [[ ! -s "$file" ]] || printf '\n'
+    printf '# >>> wsp managed path >>>\n'
+    printf '%s\n' "$assignment"
+    printf 'case ":${PATH:-}:" in\n'
+    printf '  *":${WSP_MANAGED_BIN_DIR}:"*) ;;\n'
+    printf '  *) export PATH="${WSP_MANAGED_BIN_DIR}:${PATH:-}" ;;\n'
+    printf 'esac\n'
+    printf 'unset WSP_MANAGED_BIN_DIR\n'
+    printf '# <<< wsp managed path <<<\n'
+  } >> "$file"
+}
+
+verify_shell_path_registration() {
+  local shell_name="$1" rc_file="$2" target="$3" shell_bin
+  shell_bin="$(command -v "$shell_name" 2>/dev/null || true)"
+  [[ -n "$shell_bin" ]] || fail "SUPPORTED_SHELL_EXECUTABLE_NOT_FOUND:$shell_name"
+  case "$shell_name" in
+    bash)
+      "$shell_bin" --noprofile --norc -c '
+        . "$1"
+        resolved="$(command -v wsp 2>/dev/null || true)"
+        [[ "$resolved" == "$2" ]] || exit 41
+        wsp version >/dev/null
+      ' wsp-verify "$rc_file" "$target" || fail 'PATH_REGISTRATION_VERIFICATION_FAILED'
+      ;;
+    zsh)
+      "$shell_bin" -f -c '
+        . "$1"
+        resolved="$(command -v wsp 2>/dev/null || true)"
+        [[ "$resolved" == "$2" ]] || exit 41
+        wsp version >/dev/null
+      ' wsp-verify "$rc_file" "$target" || fail 'PATH_REGISTRATION_VERIFICATION_FAILED'
+      ;;
+    *) fail "UNSUPPORTED_SHELL:$shell_name" ;;
+  esac
+}
+
 cmd_bootstrap() {
-  local bin_dir='' existing='' target resolved
+  local bin_dir='' existing='' target='' result='REGISTERED'
+  local path_result='ALREADY_PRESENT' shell_name='' rc_file='' block_state='NOT_REQUIRED'
+
   require_supported_platform
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -545,40 +668,76 @@ cmd_bootstrap() {
     shift
   done
 
-  if [[ -z "$bin_dir" ]]; then
-    [[ -n "${HOME:-}" ]] || fail 'HOME_UNAVAILABLE'
-    bin_dir="$HOME/.local/bin"
-  fi
-  case "$bin_dir" in /*) ;; *) fail 'BIN_DIR_MUST_BE_ABSOLUTE' ;; esac
-  path_contains_dir "$bin_dir" || fail "BIN_DIR_NOT_ON_PATH:$bin_dir"
-
   existing="$(command -v wsp 2>/dev/null || true)"
   if [[ -n "$existing" ]] && ! same_product_executable "$existing"; then
     fail "UNRELATED_WSP_COMMAND_EXISTS:$existing"
   fi
 
+  if [[ -z "$bin_dir" ]]; then
+    if [[ -n "$existing" && "$existing" == */* ]]; then
+      bin_dir="${existing%/*}"
+    else
+      bin_dir="$(select_user_bin_dir)"
+    fi
+  fi
+  case "$bin_dir" in /*) ;; *) fail 'BIN_DIR_MUST_BE_ABSOLUTE' ;; esac
+
   mkdir -p "$bin_dir"
   [[ -d "$bin_dir" ]] || fail "BIN_DIR_NOT_DIRECTORY:$bin_dir"
   target="$bin_dir/wsp"
+
   if [[ -e "$target" || -L "$target" ]]; then
     if same_product_executable "$target"; then
-      printf 'WORKSPACE OPS BOOTSTRAP\nRESULT: NO_CHANGE_REQUIRED\nCOMMAND_PATH: %s\nSTATUS: PASS\n' "$target"
-      return 0
+      result='NO_CHANGE_REQUIRED'
+    else
+      fail "TARGET_WSP_EXISTS:$target"
     fi
-    fail "TARGET_WSP_EXISTS:$target"
+  else
+    ln -s "$SOURCE_PATH" "$target" || fail 'COMMAND_REGISTRATION_FAILED'
   fi
 
-  ln -s "$SOURCE_PATH" "$target" || fail 'COMMAND_REGISTRATION_FAILED'
-  hash -r 2>/dev/null || true
-  resolved="$(command -v wsp 2>/dev/null || true)"
-  if [[ -z "$resolved" ]] || ! same_product_executable "$resolved"; then
-    rm -f "$target"
-    fail 'COMMAND_REGISTRATION_VERIFICATION_FAILED'
+  if path_contains_dir "$bin_dir"; then
+    hash -r 2>/dev/null || true
+    existing="$(command -v wsp 2>/dev/null || true)"
+    if [[ -z "$existing" ]] || ! same_product_executable "$existing"; then
+      [[ "$result" == 'NO_CHANGE_REQUIRED' ]] || rm -f "$target"
+      fail 'COMMAND_REGISTRATION_VERIFICATION_FAILED'
+    fi
+  else
+    shell_name="$(detect_user_shell 2>/dev/null || true)"
+    [[ -n "$shell_name" ]] || {
+      [[ "$result" == 'NO_CHANGE_REQUIRED' ]] || rm -f "$target"
+      fail 'UNSUPPORTED_SHELL_FOR_PATH_REGISTRATION'
+    }
+    rc_file="$(shell_rc_file "$shell_name")"
+    block_state="$(managed_path_block_state "$rc_file" "$bin_dir")"
+    case "$block_state" in
+      ABSENT)
+        append_managed_path_block "$rc_file" "$bin_dir"
+        path_result='ADDED'
+        ;;
+      PRESENT)
+        path_result='PRESERVED'
+        ;;
+      CONFLICT)
+        [[ "$result" == 'NO_CHANGE_REQUIRED' ]] || rm -f "$target"
+        fail "PATH_MANAGED_BLOCK_CONFLICT:$rc_file"
+        ;;
+      *) fail 'PATH_MANAGED_BLOCK_STATE_UNKNOWN' ;;
+    esac
+    verify_shell_path_registration "$shell_name" "$rc_file" "$target"
   fi
+
   printf 'WORKSPACE OPS BOOTSTRAP\n'
-  printf 'RESULT: REGISTERED\n'
+  printf 'RESULT: %s\n' "$result"
   printf 'COMMAND_PATH: %s\n' "$target"
   printf 'SOURCE: %s\n' "$SOURCE_PATH"
+  printf 'PATH_REGISTRATION: %s\n' "$path_result"
+  if [[ -n "$shell_name" ]]; then
+    printf 'SHELL: %s\n' "$shell_name"
+    printf 'SHELL_RC: %s\n' "$rc_file"
+  fi
+  printf 'ALIAS_REQUIRED: NO\n'
   printf 'STATUS: PASS\n'
 }
 
@@ -662,13 +821,21 @@ cmd_doctor() {
   registered="$(command -v wsp 2>/dev/null || true)"
   if [[ -z "$registered" ]]; then
     printf 'COMMAND_REGISTRATION: ABSENT\n'
+    printf 'PATH_REGISTRATION: MISSING\n'
     blocked=$((blocked + 1))
   elif same_product_executable "$registered"; then
     printf 'COMMAND_REGISTRATION: PASS\n'
     printf 'COMMAND_PATH: %s\n' "$registered"
+    if [[ "$registered" == */* ]] && path_contains_dir "${registered%/*}"; then
+      printf 'PATH_REGISTRATION: PASS\n'
+    else
+      printf 'PATH_REGISTRATION: BLOCKED\n'
+      blocked=$((blocked + 1))
+    fi
   else
     printf 'COMMAND_REGISTRATION: CONFLICT\n'
     printf 'COMMAND_PATH: %s\n' "$registered"
+    printf 'PATH_REGISTRATION: BLOCKED\n'
     blocked=$((blocked + 1))
   fi
 

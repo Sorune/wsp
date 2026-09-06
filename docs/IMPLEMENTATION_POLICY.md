@@ -86,14 +86,37 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/wsp/workspace-root
 
 ## Command registration
 
-P0D `wsp bootstrap` registers the checked-out Product executable with a symlink in an explicitly PATH-visible bin directory.
+P0D `wsp bootstrap` registers the checked-out Product executable with a symlink in a user command directory.
 
 ```text
+WSP INSTALLED
+→ wsp is directly invokable
+
 shell alias
 != required installation mechanism
 ```
 
-The default candidate is `$HOME/.local/bin`, but bootstrap refuses to claim success if that directory is not already on `PATH`. An unrelated existing `wsp` command or target file is never overwritten silently.
+The default command-directory selection prefers an already PATH-visible `$HOME/.local/bin` or `$HOME/bin`; otherwise it uses `$HOME/.local/bin` and persists that directory for a supported shell.
+
+Current persistent PATH scope is deliberately small:
+
+```text
+Linux bash  -> ~/.bashrc
+macOS bash  -> ~/.bash_profile
+zsh         -> ~/.zshrc
+```
+
+When PATH persistence is needed, bootstrap appends one managed block instead of rewriting the shell rc:
+
+```text
+# >>> wsp managed path >>>
+...
+# <<< wsp managed path <<<
+```
+
+Existing unrelated rc content is preserved. Repeated bootstrap recognizes the same managed block and does not duplicate it. An unrelated existing `wsp` command or target file is never overwritten silently. After registration, bootstrap verifies that a clean supported shell can resolve the registered command and run `wsp version`.
+
+`wsp doctor` reports both command-registration health and whether the resolved command directory is present on the current PATH.
 
 Release packaging remains a later gate.
 
@@ -108,6 +131,8 @@ WSL Bash: detected but unverified
 Git Bash: detected but unsupported in P0D
 native PowerShell: outside this Bash implementation
 ```
+
+PATH persistence is tested for bash and zsh startup files on the supported Linux/macOS Product path. This does not expand Windows support.
 
 Mutation commands (`init`, `config reconcile`, `bootstrap`) are gated to the currently supported platform set. Read-only commands may still expose diagnostic information on unverified environments without converting that into a support claim.
 

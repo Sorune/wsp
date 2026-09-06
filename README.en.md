@@ -68,18 +68,33 @@ From a Product checkout:
 ```bash
 ./bin/wsp version
 ./bin/wsp init /path/to/workspace
+./bin/wsp bootstrap
 ```
 
-Register the Product executable in a user bin directory that is already on `PATH`:
+`bootstrap` selects a user command directory and registers a `wsp` symlink. If that directory is not already on `PATH`, it appends one minimal WSP-managed block to a supported shell startup file.
+
+```text
+bash (Linux) : ~/.bashrc
+bash (macOS) : ~/.bash_profile
+zsh          : ~/.zshrc
+```
+
+Open a new shell or apply the `SHELL_RC` reported by bootstrap, then invoke the Product directly:
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
-./bin/wsp bootstrap
 wsp version
 wsp doctor
 ```
 
-Bootstrap never silently overwrites an unrelated existing `wsp` executable. A shell alias is not a required installation mechanism.
+Persistent PATH changes are limited to the managed marker block; unrelated shell rc content is preserved.
+
+```text
+# >>> wsp managed path >>>
+...
+# <<< wsp managed path <<<
+```
+
+Bootstrap never silently overwrites an unrelated existing `wsp` executable. Existing valid Product registration and the managed PATH block are preserved on repeated bootstrap. A shell alias is not a required installation mechanism.
 
 ## Configuration lifecycle
 
@@ -115,6 +130,8 @@ Current CI-verified mutation paths:
 Linux Bash: SUPPORTED
 macOS Bash: SUPPORTED
 ```
+
+Command PATH persistence on Linux/macOS is verified for bash and zsh startup files.
 
 Windows environments are detected without advancing an unsupported compatibility claim:
 
@@ -164,11 +181,13 @@ Stable CLI/schema compatibility: NOT YET FROZEN
 ## Development
 
 ```bash
-bash -n bin/wsp tests/selftest.sh
+bash -n bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/selftest.sh
+bash tests/config-lifecycle.sh
+bash tests/path-registration.sh
 bash tests/selftest.sh
 ```
 
-CI validates bootstrap/configuration lifecycle and the existing read-only Git behavior on Linux and macOS.
+CI validates the configuration lifecycle, command/PATH registration, and existing read-only Git behavior on Linux and macOS.
 
 ## License
 

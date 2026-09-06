@@ -70,18 +70,33 @@ Checkout에서:
 ```bash
 ./bin/wsp version
 ./bin/wsp init /path/to/workspace
+./bin/wsp bootstrap
 ```
 
-`wsp` command를 직접 호출하려면 PATH에 있는 사용자 bin directory를 사용한다.
+`bootstrap`은 user command directory를 선택해 `wsp` symlink를 등록한다. 선택한 directory가 현재 `PATH`에 없으면 지원 shell의 startup file에 WSP managed block을 한 번만 추가한다.
+
+```text
+bash (Linux) : ~/.bashrc
+bash (macOS) : ~/.bash_profile
+zsh          : ~/.zshrc
+```
+
+새 shell을 열거나 `bootstrap`이 출력한 `SHELL_RC`를 적용한 뒤 직접 실행할 수 있다.
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
-./bin/wsp bootstrap
 wsp version
 wsp doctor
 ```
 
-이미 unrelated `wsp` executable이 있으면 silent overwrite하지 않고 BLOCKED 처리한다. shell alias는 필수 설치 방식이 아니다.
+PATH 변경은 다음 marker 사이의 최소 managed block만 append하며 기존 shell rc 내용은 보존한다.
+
+```text
+# >>> wsp managed path >>>
+...
+# <<< wsp managed path <<<
+```
+
+이미 unrelated `wsp` executable이 있으면 silent overwrite하지 않고 BLOCKED 처리한다. 기존 정상 Product `wsp` 등록과 managed PATH block은 재실행 시 보존된다. shell alias는 필수 설치 방식이 아니다.
 
 ## Configuration lifecycle
 
@@ -117,6 +132,8 @@ PRODUCT VERSION != CONFIG VERSION
 Linux Bash: SUPPORTED
 macOS Bash: SUPPORTED
 ```
+
+Linux/macOS의 command PATH persistence는 bash와 zsh startup file 범위에서 검증한다.
 
 Windows는 family/environment를 감지하지만 P0D에서 support claim을 앞당기지 않는다.
 
@@ -166,11 +183,13 @@ Stable CLI/schema compatibility: NOT YET FROZEN
 ## Development
 
 ```bash
-bash -n bin/wsp tests/selftest.sh
+bash -n bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/selftest.sh
+bash tests/config-lifecycle.sh
+bash tests/path-registration.sh
 bash tests/selftest.sh
 ```
 
-CI는 Linux와 macOS에서 bootstrap/config lifecycle과 기존 Git read-only behavior를 함께 검증한다.
+CI는 Linux와 macOS에서 config lifecycle, command/PATH registration, 기존 Git read-only behavior를 함께 검증한다.
 
 ## License
 
