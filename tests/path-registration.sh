@@ -18,6 +18,14 @@ not_contains() {
   case "$text" in *"$needle"*) fail_test "$label" "$text" ;; *) ok "$label" ;; esac
 }
 
+bash_rc_for_home() {
+  local home="$1"
+  case "$(uname -s 2>/dev/null || printf UNKNOWN)" in
+    Darwin) printf '%s/.bash_profile\n' "$home" ;;
+    *) printf '%s/.bashrc\n' "$home" ;;
+  esac
+}
+
 bash -n "$WSP" && ok 'wsp bash syntax' || fail_test 'wsp bash syntax'
 
 TMP="$(mktemp -d)"
@@ -28,12 +36,13 @@ BASE_PATH='/usr/bin:/bin'
 # Fresh bash user: bin is absent from PATH and rc already has unrelated content.
 HOME1="$TMP/home user"
 mkdir -p "$HOME1"
-RC1="$HOME1/.bashrc"
+RC1="$(bash_rc_for_home "$HOME1")"
 printf '# user content\nexport USER_KEEP=value\n' > "$RC1"
 before_prefix="$(cat "$RC1")"
 out="$(HOME="$HOME1" SHELL=/bin/bash PATH="$BASE_PATH" "$WSP" bootstrap)"
 contains "$out" 'RESULT: REGISTERED' 'fresh command registration'
 contains "$out" 'PATH_REGISTRATION: ADDED' 'fresh PATH registration'
+contains "$out" "SHELL_RC: $RC1" 'platform-appropriate bash rc selected'
 contains "$out" 'ALIAS_REQUIRED: NO' 'no alias dependency'
 [[ -L "$HOME1/.local/bin/wsp" ]] && ok 'fresh launcher is symlink' || fail_test 'fresh launcher is symlink'
 contains "$(cat "$RC1")" "$before_prefix" 'bash rc unrelated content preserved'
@@ -42,7 +51,7 @@ begin_count="$(grep -c '^# >>> wsp managed path >>>$' "$RC1")"
 end_count="$(grep -c '^# <<< wsp managed path <<<$' "$RC1")"
 [[ "$begin_count" == 1 && "$end_count" == 1 ]] && ok 'single managed block' || fail_test 'single managed block'
 
-out="$(HOME="$HOME1" PATH="$BASE_PATH" bash --noprofile --norc -c '. "$HOME/.bashrc"; wsp version')"
+out="$(HOME="$HOME1" PATH="$BASE_PATH" bash --noprofile --norc -c '. "$1"; wsp version' _ "$RC1")"
 contains "$out" 'CLI: wsp' 'new bash directly invokes wsp version'
 
 before_second="$(cat "$RC1")"
@@ -57,7 +66,7 @@ begin_count="$(grep -c '^# >>> wsp managed path >>>$' "$RC1")"
 WS1="$TMP/workspace"
 STATE1="$TMP/state"
 mkdir -p "$WS1"
-HOME="$HOME1" PATH="$BASE_PATH" bash --noprofile --norc -c '. "$HOME/.bashrc"; WSP_STATE_HOME="$1" wsp init "$2" >/dev/null; WSP_STATE_HOME="$1" wsp doctor' _ "$STATE1" "$WS1" > "$TMP/doctor.out"
+HOME="$HOME1" PATH="$BASE_PATH" bash --noprofile --norc -c '. "$1"; WSP_STATE_HOME="$2" wsp init "$3" >/dev/null; WSP_STATE_HOME="$2" wsp doctor' _ "$RC1" "$STATE1" "$WS1" > "$TMP/doctor.out"
 doctor_out="$(cat "$TMP/doctor.out")"
 contains "$doctor_out" 'COMMAND_REGISTRATION: PASS' 'doctor command registration health'
 contains "$doctor_out" 'PATH_REGISTRATION: PASS' 'doctor PATH registration health'
@@ -66,7 +75,7 @@ contains "$doctor_out" 'OVERALL: PASS' 'doctor passes installed state'
 # PATH already configured: do not touch rc.
 HOME2="$TMP/path already"
 BIN2="$HOME2/.local/bin"
-RC2="$HOME2/.bashrc"
+RC2="$(bash_rc_for_home "$HOME2")"
 mkdir -p "$BIN2"
 printf '# preserve me\n' > "$RC2"
 before2="$(cat "$RC2")"
@@ -79,19 +88,19 @@ not_contains "$(cat "$RC2")" 'wsp managed path' 'PATH-already no managed block'
 # Custom user bin containing spaces.
 HOME3="$TMP/custom home"
 BIN3="$HOME3/commands with spaces"
-RC3="$HOME3/.bashrc"
+RC3="$(bash_rc_for_home "$HOME3")"
 mkdir -p "$HOME3"
 printf '# custom rc content\n' > "$RC3"
 out="$(HOME="$HOME3" SHELL=/bin/bash PATH="$BASE_PATH" "$WSP" bootstrap --bin-dir "$BIN3")"
 contains "$out" "COMMAND_PATH: $BIN3/wsp" 'space-containing command path registered'
 contains "$out" 'PATH_REGISTRATION: ADDED' 'space-containing path persisted'
-out="$(HOME="$HOME3" PATH="$BASE_PATH" bash --noprofile --norc -c '. "$HOME/.bashrc"; wsp version')"
+out="$(HOME="$HOME3" PATH="$BASE_PATH" bash --noprofile --norc -c '. "$1"; wsp version' _ "$RC3")"
 contains "$out" 'Workspace Ops' 'space-containing PATH works in new shell'
 
 # Existing target collision is blocked before rc mutation.
 HOME4="$TMP/target collision"
 BIN4="$HOME4/.local/bin"
-RC4="$HOME4/.bashrc"
+RC4="$(bash_rc_for_home "$HOME4")"
 mkdir -p "$BIN4"
 printf '# collision rc\n' > "$RC4"
 printf '#!/usr/bin/env bash\necho unrelated\n' > "$BIN4/wsp"
@@ -109,7 +118,7 @@ fi
 HOME5="$TMP/path collision"
 COLLISION="$TMP/unrelated-bin"
 mkdir -p "$HOME5" "$COLLISION"
-RC5="$HOME5/.bashrc"
+RC5="$(bash_rc_for_home "$HOME5")"
 printf '# path collision rc\n' > "$RC5"
 printf '#!/usr/bin/env bash\necho unrelated-path\n' > "$COLLISION/wsp"
 chmod +x "$COLLISION/wsp"
