@@ -102,7 +102,8 @@ out="$(run_doctor Haiku x86_64 no unknown-doctor)"
 contains "$out" 'PLATFORM_SUPPORT: UNSUPPORTED' 'unknown OS unsupported claim'
 
 assert_bootstrap_blocked() {
-  local name="$1" os="$2" wsl="$3" expected="$4" home="$TMP/home-$name" output
+  local name="$1" os="$2" wsl="$3" expected="$4"
+  local home="$TMP/home-$name" output
   mkdir -p "$home"
   printf '# keep me\n' > "$home/.bashrc"
   if output="$(env \
