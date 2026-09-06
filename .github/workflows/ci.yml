@@ -22,12 +22,14 @@ jobs:
         with:
           fetch-depth: 0
       - name: Normalize executable bits
-        run: chmod +x bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/selftest.sh
+        run: chmod +x bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/platform-routing.sh tests/selftest.sh
       - name: Bash syntax
-        run: bash -n bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/selftest.sh
+        run: bash -n bin/wsp tests/config-lifecycle.sh tests/path-registration.sh tests/platform-routing.sh tests/selftest.sh
       - name: P0D1 configuration lifecycle
         run: bash tests/config-lifecycle.sh
       - name: P0D2 command PATH registration
         run: bash tests/path-registration.sh
+      - name: P0D3 platform routing
+        run: bash tests/platform-routing.sh
       - name: Product selftest
         run: bash tests/selftest.sh
