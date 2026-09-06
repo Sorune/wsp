@@ -27,6 +27,7 @@ contains "$out" 'IMPLEMENTATION: Bash' 'version implementation identity'
 contains "$out" 'PLATFORM_FAMILY:' 'version platform detection'
 
 TMP="$(mktemp -d)"
+TMP="$(cd -P "$TMP" >/dev/null 2>&1 && pwd)"
 trap 'rm -rf "$TMP"' EXIT
 STATE="$TMP/state"
 WS="$TMP/workspace root with spaces"
