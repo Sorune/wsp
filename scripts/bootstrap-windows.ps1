@@ -95,11 +95,12 @@ if ((Test-Path -LiteralPath $target -PathType Leaf) -and -not (Test-ProductLaunc
 
 $batchShell = Escape-BatchLiteral $shellPath
 $batchAdapter = Escape-BatchLiteral $adapterPath
+$invokeLine = '"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}" %*' -f $batchShell, $batchAdapter
 $launcherContent = @(
     '@echo off',
     'REM WSP_PRODUCT_LAUNCHER_V1',
     "REM WSP_PRODUCT_ADAPTER=$batchAdapter",
-    "\"$batchShell\" -NoProfile -ExecutionPolicy Bypass -File \"$batchAdapter\" %*",
+    $invokeLine,
     'exit /b %ERRORLEVEL%'
 ) -join "`r`n"
 $launcherContent += "`r`n"
