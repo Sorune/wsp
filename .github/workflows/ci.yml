@@ -33,3 +33,29 @@ jobs:
         run: bash tests/platform-routing.sh
       - name: Product selftest
         run: bash tests/selftest.sh
+
+  windows-native:
+    name: windows-latest native terminal
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: PowerShell syntax
+        shell: pwsh
+        run: |
+          $files = @('scripts/wsp-windows.ps1', 'scripts/bootstrap-windows.ps1', 'tests/windows-routing.ps1')
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+            }
+          }
+      - name: P0D3-R1 Windows native terminal routing
+        shell: pwsh
+        run: ./tests/windows-routing.ps1
