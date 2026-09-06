@@ -145,18 +145,30 @@ else
   ok 'no distro-name overfitting'
 fi
 
-if grep -Eiq '(/home/sorune|homemedia|bc250|Develope)' "$WSP"; then
+if grep -Eiq '(/home/sorune|homemedia|bc250|Develope)' "$WSP" "$ROOT/scripts/wsp-windows.ps1" "$ROOT/scripts/bootstrap-windows.ps1"; then
   fail_test 'no Sorune machine/path hardcoding'
 else
   ok 'no Sorune machine/path hardcoding'
 fi
 
-[[ ! -e "$ROOT/bin/wsp.ps1" ]] && ok 'native PowerShell Product implementation absent' || fail_test 'native PowerShell Product implementation absent'
+[[ -f "$ROOT/scripts/wsp-windows.ps1" ]] && ok 'Windows native terminal adapter present' || fail_test 'Windows native terminal adapter present'
+[[ -f "$ROOT/scripts/bootstrap-windows.ps1" ]] && ok 'Windows native bootstrap present' || fail_test 'Windows native bootstrap present'
 [[ -f "$ROUTING_DOC" ]] && ok 'platform routing policy document present' || fail_test 'platform routing policy document present'
 if [[ -f "$ROUTING_DOC" ]]; then
-  contains "$(cat "$ROUTING_DOC")" 'native PowerShell' 'native PowerShell policy explicit'
-  contains "$(cat "$ROUTING_DOC")" 'UNAVAILABLE / UNSUPPORTED' 'native PowerShell support not falsely claimed'
-  contains "$(cat "$ROUTING_DOC")" 'CI classification PASS != physical Windows Product acceptance' 'physical Windows acceptance separated from CI classification'
+  routing_text="$(cat "$ROUTING_DOC")"
+  contains "$routing_text" 'HOST PLATFORM' 'Windows host layer documented'
+  contains "$routing_text" 'CMD / PowerShell' 'CMD and PowerShell terminal surfaces documented'
+  contains "$routing_text" 'IMPLEMENTED / CI VERIFIED' 'Windows native support remains CI-scoped'
+  contains "$routing_text" 'PHYSICAL WINDOWS ACCEPTANCE: PENDING' 'physical Windows acceptance remains pending'
+  contains "$routing_text" 'WSL direct invocation' 'WSL remains separately classified'
+  contains "$routing_text" 'Git Bash direct invocation' 'Git Bash remains separately classified'
+  contains "$routing_text" 'COMMAND AVAILABILITY' 'provider identity boundary documented'
+fi
+
+if grep -Eiq '(CODEX_THREAD_ID|WORKSPACE_SESSION_ID|claude session|provider-native)' "$ROOT/scripts/wsp-windows.ps1" "$ROOT/scripts/bootstrap-windows.ps1"; then
+  fail_test 'no provider-specific identity logic in Windows routing'
+else
+  ok 'no provider-specific identity logic in Windows routing'
 fi
 
 printf 'RESULT: PASS=%d FAIL=%d\n' "$PASS" "$FAIL"
