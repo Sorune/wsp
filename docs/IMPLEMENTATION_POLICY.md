@@ -7,9 +7,14 @@ Status: CURRENT P0D IMPLEMENTATION POLICY
 ```text
 Bash-first
 != Bash-temporary
+
+Bash-first
+!= Bash-only invocation surface
 ```
 
 Bash is the initial first-class Workspace Ops Product implementation. It remains primary while it is the simplest correct implementation of the Product contract.
+
+Windows native terminal support does not authorize a full PowerShell rewrite. The Windows route uses only the minimum launcher/adapter required to expose the same `wsp` Product from normal Windows terminals while continuing to reuse the shared Bash core.
 
 ## Current implementation pressure
 
@@ -30,7 +35,7 @@ This is still orchestration/inspection work and does not yet justify a mandatory
 
 ## Dependency policy
 
-Current Product dependencies remain intentionally small:
+Linux/macOS Product dependencies remain intentionally small:
 
 ```text
 bash
@@ -40,6 +45,16 @@ uname
 mktemp
 standard Unix userland needed for mkdir/mv/ln
 ```
+
+Windows native terminal routing additionally requires:
+
+```text
+PowerShell (pwsh or Windows PowerShell)
+Git for Windows
+Git-for-Windows Bash runtime
+```
+
+The Windows adapter resolves Bash from the installed Git for Windows location. It does not silently route Windows native terminals through WSL.
 
 Hosting-provider clients are not Core P0D requirements.
 
@@ -84,9 +99,11 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/wsp/workspace-root
 
 `WSP_STATE_HOME` may override this state location for tests/isolated environments. This is a Product implementation detail, not Reference semantics.
 
+On the Windows native route, the thin adapter converts Windows path inputs/environment paths into the Git-for-Windows Bash runtime form before invoking the shared core. The config lifecycle logic itself is not reimplemented in PowerShell.
+
 ## Command registration
 
-P0D `wsp bootstrap` registers the checked-out Product executable with a symlink in a user command directory.
+The Product contract is:
 
 ```text
 WSP INSTALLED
@@ -96,9 +113,13 @@ shell alias
 != required installation mechanism
 ```
 
+### Linux/macOS
+
+P0D `wsp bootstrap` registers the checked-out Product executable with a symlink in a user command directory.
+
 The default command-directory selection prefers an already PATH-visible `$HOME/.local/bin` or `$HOME/bin`; otherwise it uses `$HOME/.local/bin` and persists that directory for a supported shell.
 
-Current persistent PATH scope is deliberately small:
+Current Unix persistent PATH scope is deliberately small:
 
 ```text
 Linux bash  -> ~/.bashrc
@@ -114,27 +135,59 @@ When PATH persistence is needed, bootstrap appends one managed block instead of 
 # <<< wsp managed path <<<
 ```
 
-Existing unrelated rc content is preserved. Repeated bootstrap recognizes the same managed block and does not duplicate it. An unrelated existing `wsp` command or target file is never overwritten silently. After registration, bootstrap verifies that a clean supported shell can resolve the registered command and run `wsp version`.
+Existing unrelated rc content is preserved. Repeated bootstrap recognizes the same managed block and does not duplicate it.
 
-`wsp doctor` reports both command-registration health and whether the resolved command directory is present on the current PATH.
+### Windows native
+
+Windows native bootstrap installs one Product-owned launcher:
+
+```text
+%USERPROFILE%\.local\bin\wsp.cmd
+```
+
+The default path may be overridden by an explicit `--bin-dir` route through the Windows adapter/bootstrap.
+
+The launcher is shared by both native terminal surfaces:
+
+```text
+CMD> wsp ...
+PS>  wsp ...
+```
+
+It invokes a thin PowerShell adapter, which routes normal Product commands into the existing Bash core using the Bash runtime shipped with Git for Windows. `bootstrap` itself remains native because Windows User PATH registration is not a Unix shell-rc operation.
+
+Windows User PATH is preserved and the command directory is appended only when absent. An unrelated existing `wsp` is never overwritten silently. An existing Product-marked launcher is preserved when identical and may be updated only as Product-owned launcher content when its legitimate adapter path changes.
+
+`wsp doctor` on the Windows adapter verifies Product launcher identity and persistent User PATH while preserving the shared core's configuration/dependency diagnostics.
 
 Release packaging remains a later gate.
 
 ## Platform policy
 
-Platform family is detected from the runtime environment.
+Platform routing keeps host, terminal surface, and compatibility environment separate.
 
 ```text
-Linux native Bash: CI-verified
-macOS Bash: CI-verified
-WSL Bash: detected but unverified
-Git Bash: detected but unsupported in P0D
-native PowerShell: outside this Bash implementation
+Linux native Bash: CI-verified / SUPPORTED
+macOS Bash: CI-verified / SUPPORTED
+
+Windows native host:
+  CMD surface
+  PowerShell surface
+  status = IMPLEMENTED / CI VERIFIED
+  physical acceptance = PENDING
+
+WSL Bash: detected but UNVERIFIED
+Git Bash direct invocation: detected but UNSUPPORTED
 ```
 
-PATH persistence is tested for bash and zsh startup files on the supported Linux/macOS Product path. This does not expand Windows support.
+The Windows native adapter may use Git-for-Windows Bash internally without converting direct Git Bash invocation into a supported Product surface.
 
-Mutation commands (`init`, `config reconcile`, `bootstrap`) are gated to the currently supported platform set. Read-only commands may still expose diagnostic information on unverified environments without converting that into a support claim.
+```text
+INTERNAL RUNTIME ADAPTER
+!= USER TERMINAL ENVIRONMENT
+```
+
+Mutation commands on direct WSL/Git Bash remain gated by their current classification. Windows native mutation reaches the shared Bash core only through the explicit native adapter route.
 
 ## Git boundary
 
@@ -162,9 +215,11 @@ PROVENANCE = Git revision
 PRODUCT UPDATE != CONFIG RESET
 ```
 
+On Windows native, initial command installation can be invoked from the checkout through `scripts/bootstrap-windows.ps1`; after installation the same public `wsp` command surface is used.
+
 ## Native migration policy
 
-There is no schedule-driven rewrite. Potential triggers remain complex structured state, transactional persistence, concurrency, distributed coordination, long-running daemon requirements, native Windows support, structured RPC/API requirements, or demonstrated shell maintainability/performance limits.
+There is no schedule-driven rewrite. Potential triggers remain complex structured state, transactional persistence, concurrency, distributed coordination, long-running daemon requirements, a demonstrated need for a fully native Windows runtime, structured RPC/API requirements, or demonstrated shell maintainability/performance limits.
 
 Go remains a likely candidate if such pressure appears; it is not part of Reference semantics and is not authorized merely by P0D growth.
 
