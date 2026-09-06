@@ -22,8 +22,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Normalize executable bits
-        run: chmod +x bin/wsp tests/selftest.sh
+        run: chmod +x bin/wsp tests/config-lifecycle.sh tests/selftest.sh
       - name: Bash syntax
-        run: bash -n bin/wsp tests/selftest.sh
+        run: bash -n bin/wsp tests/config-lifecycle.sh tests/selftest.sh
+      - name: P0D1 configuration lifecycle
+        run: bash tests/config-lifecycle.sh
       - name: Product selftest
         run: bash tests/selftest.sh
