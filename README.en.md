@@ -1,131 +1,58 @@
-# Workspace Ops
+# wsp
 
-[한국어](./README.md) · [English](./README.en.md)
-
-> A Bash-first developer tool for reconciling a logical development workspace with its physical Git and execution state.
-
-Workspace Ops is a public product for observing and explaining the gap between a developer's **logical workspace** and the filesystem, Git repository, checkout/worktree, machine, and revision state where development actually happens.
+`wsp` is a local development workspace semantic product. It observes Git and
+filesystem facts, combines them with explicit local relations, and presents one
+read-only semantic projection to Humans and automation.
 
 ```text
-Logical Workspace
-        ↕
-Reconciliation
-        ↕
-Physical Workspace / Execution State
+Adapter facts → normalized model → relations → Inspector → Lens → presentation
 ```
 
-The initial Product is intentionally **READ-ONLY / GIT-FIRST / BASH-FIRST**.
+## V0 boundary
 
-## Product boundary
+The public core owns Project and Repository identity, Workspace Copy, Machine,
+Revision, Relation, Finding, Provenance, UNKNOWN, and reason semantics. Git is
+the bundled read-only adapter. `wsp` never promotes, deploys, repairs, cleans,
+or creates authority.
 
-Workspace Ops does not replace Git.
+The Product does not depend on private Workspace Ops, Session Guard, Agent Rule,
+promotion, lifecycle, or Resource Closure implementations.
 
-```text
-Git
-= repository / revision / branch / worktree mechanics
-
-Workspace Ops
-= context / relations / reconciliation around those mechanics
-```
-
-The initial Product directly observes a small core:
-
-- Repository
-- Workspace Copy
-- Machine
-- Revision
-
-Project, Session, Acceptance Binding, Agent Governance, and broader observability remain gated follow-on capabilities.
-
-## CLI
-
-The preferred short executable is `wsp`.
+## Commands
 
 ```bash
-wsp version
-wsp status
+wsp init [path]
+wsp inspect [path] [--json]
+wsp repo inspect [path] [--json]
+wsp lens tree [path] --axis logical|session [--json]
+wsp status [--json]
 wsp doctor
-wsp repo inspect [path]
-```
-
-Current commands are observational. They do not fetch, pull, reset, clean, repair, deploy, or otherwise mutate the inspected repository.
-
-## Quick start
-
-Run directly from a repository checkout:
-
-```bash
-./bin/wsp version
-./bin/wsp doctor
-./bin/wsp status
-./bin/wsp repo inspect .
-```
-
-A PATH entry may point to the checkout through a symlink:
-
-```bash
-ln -s /path/to/wsp/bin/wsp ~/.local/bin/wsp
 wsp version
 ```
 
-Installer automation and release packaging are not stable contracts yet. Installation must not silently overwrite an unrelated existing `wsp` executable.
+`wsp init` creates `.wsp/workspace.yaml`, owned by this Product. It does not
+modify Git history or remotes. Relations are declared; directory names are not
+treated as semantic hierarchy.
 
-## Bash-first policy
+Human and JSON output use the same projection. JSON is deterministic,
+undecorated, and non-interactive. UNKNOWN is a representable observation, not
+automatically an error or violation.
 
-Bash is the initial first-class Product implementation, not disposable prototype code.
+## Runtime and support
 
-```text
-Bash-first
-!= Bash-temporary
-```
+The front door is a thin POSIX shell launcher. Semantic behavior is implemented
+by a standard-library-first Go core. V0 targets macOS and Linux; native Windows
+and PowerShell are deferred.
 
-Workspace Ops may remain Bash-based for as long as Bash remains the simplest correct implementation of the Product contract. A Go, Rust, or other native component should be introduced only after demonstrated implementation pressure justifies it.
-
-## Reference / Product / Lab
-
-Workspace Ops separates different authority scopes:
-
-```text
-Workspace Ops Reference
-= semantics / invariants / conformance expectations
-
-Workspace Ops Product (this repository)
-= CLI / runtime behavior / serialization / releases
-
-Private Lab
-= dogfooding / experiments / private operational truth
-```
-
-Reference: [Sorune/workspace-ops-public](https://github.com/Sorune/workspace-ops-public)
-
-```text
-PRIVATE EXPERIENCE
-!= AUTOMATIC PUBLIC AUTHORITY
-```
-
-Private Lab implementation is not copied into this repository. Validated behavior is generalized and reimplemented against the Product boundary.
-
-## Current maturity
-
-```text
-Product: Workspace Ops
-CLI: wsp
-Implementation: Bash
-Scope: read-only / Git-first
-Phase: P0
-Stable CLI/schema compatibility: NOT YET FROZEN
-Mutation/orchestration: NOT IMPLEMENTED
-```
+During implementation the version is `0.1.0-dev`. A `v0.1.0` release is a
+separate Human gate.
 
 ## Development
 
 ```bash
-bash -n bin/wsp
-bash tests/selftest.sh
+go test ./...
+go vet ./...
+bash tests/conformance.sh
 ```
-
-CI validates the minimum Product behavior on Linux and macOS.
-
-## License
 
 Apache License 2.0.

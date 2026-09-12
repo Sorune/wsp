@@ -1,0 +1,15 @@
+schema_version: 1
+title: WSP semantic output envelope
+type: object
+required: [schema_version, command, status, entities, relations, findings, unknowns, errors]
+properties:
+  schema_version: {type: integer, const: 1}
+  command: {type: string}
+  status: {type: string, enum: [OK, ERROR]}
+  target: {type: string}
+  entities: {type: array}
+  relations: {type: array}
+  findings: {type: array}
+  unknowns: {type: array}
+  projection: {}
+  errors: {type: array}

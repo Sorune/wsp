@@ -1,95 +1,30 @@
-# Bash-First Implementation Policy
+# WSP V0 Implementation Policy
 
-Status: CURRENT P0 IMPLEMENTATION POLICY
+Status: Human-approved V0 runtime boundary.
 
-## Primary rule
-
-```text
-Bash-first
-!= Bash-temporary
-```
-
-Bash is the initial first-class Workspace Ops Product implementation. It remains primary while it is the simplest correct implementation of the Product contract.
-
-## Why Bash fits P0
-
-P0 is dominated by:
+## Runtime
 
 ```text
-Git inspection
-filesystem/path resolution
-local environment checks
-status / doctor
-read-only reconciliation
-text output
+thin POSIX shell front door + standard-library-first Go semantic core
 ```
 
-This is orchestration and inspection work, not inherently a compiled-runtime problem.
+Shell locates and invokes the Product binary. It must not implement semantic
+normalization, relation meaning, validation, traversal, or JSON semantics.
 
-## Dependency policy
+Go owns the model, normalization, relation validation/traversal, Inspector,
+Lens, deterministic ordering, JSON, manifest validation, and UNKNOWN/reason
+semantics.
 
-Do not claim that Workspace Ops is dependency-free.
+No third-party dependency is included. Adding one requires a separate Human
+gate.
 
-Current P0 requirement is intentionally small:
+## Distribution
 
-```text
-bash
-git
-readlink
-standard Unix shell environment
-```
+The implementation version during this candidate is `0.1.0-dev`. V0 targets
+macOS and Linux. Windows/PowerShell is deferred. Release packaging, tags,
+public compatibility freeze, and `v0.1.0` release require separate acceptance.
 
-Additional dependencies must be explicit. Hosting-provider clients such as `gh` are not Core P0 requirements.
+## Safety
 
-## Distribution direction
-
-The source checkout is a valid development/deployment artifact during P0.
-
-```text
-INSTALL  = checkout approved revision + PATH registration
-UPDATE   = select a newer approved revision
-ROLLBACK = select an older approved revision
-PROVENANCE = Git revision
-```
-
-Release packaging and installer behavior are not stable yet.
-
-## Migration policy
-
-There is no schedule-driven rewrite.
-
-```text
-Bash
-→ real dogfooding
-→ implementation pressure evaluation
-    ├─ Bash sufficient → KEEP BASH
-    └─ demonstrated limit → NATIVE IMPLEMENTATION REVIEW
-```
-
-Potential review triggers include:
-
-- complex structured state;
-- transactional persistence;
-- high concurrency;
-- distributed lease/locking;
-- long-running daemon requirements;
-- large fleet coordination;
-- native Windows requirements;
-- structured RPC/API requirements;
-- measured performance or maintainability limits caused by shell semantics.
-
-Go is a likely native candidate if those pressures emerge. Rust remains a pressure-driven alternative. Neither is currently authorized as a mandatory successor.
-
-```text
-NATIVE COMPONENT INTRODUCED
-!= BASH RETIRED
-```
-
-## Semantic boundary
-
-```text
-BASH IMPLEMENTATION DETAIL
-!= REFERENCE SEMANTICS
-```
-
-Shell exit codes, environment variable names, parsing choices, directory names, and temporary layouts must not become semantic contracts merely because the first implementation uses them.
+The Product is read-only against inspected repositories. Git adapter operations
+must not fetch, push, merge, checkout, reset, clean, repair, deploy, or promote.

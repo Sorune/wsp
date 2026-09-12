@@ -1,131 +1,43 @@
-# Workspace Ops
+# wsp
 
-[한국어](./README.md) · [English](./README.en.md)
-
-> 논리적 개발 workspace와 실제 Git / 실행 상태를 reconciliation하는 Bash-first developer tool.
-
-Workspace Ops는 개발자가 생각하는 **논리적 workspace**와 실제 filesystem, Git repository, checkout/worktree, machine, revision 상태 사이의 차이를 관찰하고 설명하기 위한 public product다.
+`wsp`는 로컬 개발 workspace를 관찰하고 해석하는 read-only semantic
+Product입니다. Git/filesystem fact와 명시적 relation을 하나의 semantic
+projection으로 정규화하여 Human과 자동화에 제공합니다.
 
 ```text
-Logical Workspace
-        ↕
-Reconciliation
-        ↕
-Physical Workspace / Execution State
+Adapter facts → normalized model → relations → Inspector → Lens → presentation
 ```
 
-초기 Product는 의도적으로 **READ-ONLY / GIT-FIRST / BASH-FIRST**로 제한한다.
-
-## Product boundary
-
-Workspace Ops는 Git을 대체하지 않는다.
-
-```text
-Git
-= repository / revision / branch / worktree mechanics
-
-Workspace Ops
-= those mechanics around context / relation / reconciliation
-```
-
-초기 Product가 직접 다루는 최소 개념은 다음과 같다.
-
-- Repository
-- Workspace Copy
-- Machine
-- Revision
-
-Project, Session, Acceptance Binding, Agent Governance, observability는 실제 Product contract가 검증되는 순서에 따라 이후 별도 gate에서 확장한다.
-
-## CLI
-
-공식 short executable은 `wsp`다.
+V0 Product는 Project/Repository identity, Workspace Copy, Machine, Revision,
+Relation, Finding, Provenance, UNKNOWN/reason을 소유합니다. Git은 기본
+read-only adapter이며 promotion, deploy, repair, cleanup, authority를
+수행하지 않습니다. private Workspace Ops에 의존하지 않습니다.
 
 ```bash
-wsp version
-wsp status
+wsp init [path]
+wsp inspect [path] [--json]
+wsp repo inspect [path] [--json]
+wsp lens tree [path] --axis logical|session [--json]
+wsp status [--json]
 wsp doctor
-wsp repo inspect [path]
-```
-
-현재 명령은 관찰 전용이다. inspected repository에 대해 fetch, pull, reset, clean, repair, deploy 같은 mutation을 수행하지 않는다.
-
-## Quick start
-
-Repository checkout에서 직접 실행할 수 있다.
-
-```bash
-./bin/wsp version
-./bin/wsp doctor
-./bin/wsp status
-./bin/wsp repo inspect .
-```
-
-PATH에 등록할 때는 checkout의 `bin/wsp`를 가리키는 symlink를 사용할 수 있다.
-
-```bash
-ln -s /path/to/wsp/bin/wsp ~/.local/bin/wsp
 wsp version
 ```
 
-설치 자동화와 release packaging은 아직 stable contract가 아니다. 기존 unrelated `wsp` executable을 silent overwrite해서는 안 된다.
+`wsp init`은 Product 소유의 `.wsp/workspace.yaml`을 만들며 Git history나
+remote를 변경하지 않습니다. relation은 선언으로만 정해지고 directory
+name은 semantic hierarchy로 추론되지 않습니다. Human과 JSON은 같은
+projection을 사용하며 UNKNOWN은 오류나 violation으로 자동 변환되지
+않습니다.
 
-## Bash-first policy
-
-Bash는 임시 prototype이 아니라 초기 정식 Product implementation이다.
-
-```text
-Bash-first
-!= Bash-temporary
-```
-
-correctness, maintainability, portability, performance, Product contract 요구를 만족하는 동안 Bash를 유지한다. Go/Rust migration은 일정에 의해 열지 않고 실제 implementation pressure가 확인될 때만 별도 review한다.
-
-## Reference / Product / Lab
-
-Workspace Ops는 역할이 다른 authority를 분리한다.
-
-```text
-Workspace Ops Reference
-= semantics / invariants / conformance expectations
-
-Workspace Ops Product (this repository)
-= CLI / runtime behavior / serialization / releases
-
-Private Lab
-= dogfooding / experiments / private operational truth
-```
-
-Reference: [Sorune/workspace-ops-public](https://github.com/Sorune/workspace-ops-public)
-
-```text
-PRIVATE EXPERIENCE
-!= AUTOMATIC PUBLIC AUTHORITY
-```
-
-Private Lab 구현을 이 repository로 그대로 복사하지 않는다. 검증된 behavior를 일반화하고 Product boundary에 맞게 새로 구현한다.
-
-## Current maturity
-
-```text
-Product: Workspace Ops
-CLI: wsp
-Implementation: Bash
-Scope: read-only / Git-first
-Phase: P0
-Stable CLI/schema compatibility: NOT YET FROZEN
-Mutation/orchestration: NOT IMPLEMENTED
-```
-
-## Development
+front door는 얇은 POSIX shell이고 semantic 동작은 standard-library-first
+Go core가 담당합니다. V0 지원 대상은 macOS/Linux이며 Windows/PowerShell은
+후속 gate입니다. 구현 중 버전은 `0.1.0-dev`이고 `v0.1.0` release는 별도
+Human gate입니다.
 
 ```bash
-bash -n bin/wsp
-bash tests/selftest.sh
+go test ./...
+go vet ./...
+bash tests/conformance.sh
 ```
-
-CI는 Linux와 macOS에서 최소 Product behavior를 검증한다.
-
-## License
 
 Apache License 2.0.

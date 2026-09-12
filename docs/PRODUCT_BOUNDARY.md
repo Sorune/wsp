@@ -1,93 +1,52 @@
-# Product Boundary
+# WSP V0 Product Boundary
 
-Status: P0 / PROVISIONAL PRODUCT CONTRACT
+Status: V0 implementation candidate; release not authorized.
 
-## Identity
+## Ownership
 
-```text
-Product: Workspace Ops
-CLI: wsp
-Implementation: Bash
-Initial scope: READ-ONLY / GIT-FIRST
-```
+`Sorune/wsp` owns public semantic contracts, implementation, serialization, CLI
+behavior, and release behavior. `workspace-ops-public` is reference/demo
+material. `workspace-ops` is private operational control and dogfood.
 
-## Core thesis
+`wsp` has no dependency on either private repository.
 
-```text
-Logical Workspace
-        ↕
-Reconciliation
-        ↕
-Physical Workspace / Execution State
-```
+## Semantic core
 
-Workspace Ops does not replace source-control mechanics. Git remains authoritative for repository content, revisions, branches, refs, and worktree mechanics. Workspace Ops observes and explains workspace-level context around those mechanics.
-
-## Initial P0 facts
-
-P0 observes:
+The canonical entities are `PROJECT`, `REPOSITORY`, `WORKSPACE_COPY`, `MACHINE`,
+and `REVISION`. `RELATION` connects explicit entities. Findings, provenance,
+UNKNOWN values, and reasons are first-class output.
 
 ```text
-Repository
-Workspace Copy
-Machine
-Revision
-
-repository root
-HEAD
-branch / detached state
-working-tree state
-remote identity
-local upstream relation when already available
+REPOSITORY_ID != LOCAL_DIRECTORY_NAME
+PHYSICAL_TREE != LOGICAL_TREE
+UNKNOWN != MISSING != INVALID != VIOLATION
+OBSERVATION != AUTHORITY
 ```
 
-No network fetch is required to inspect these facts.
+Relations require explicit declarations or accepted adapter evidence. Path,
+name, and directory similarity are not relation evidence.
 
-## Safety invariants
+## Read-only pipeline
 
 ```text
-OBSERVATION != AUTHORIZATION
-UNKNOWN != VIOLATION
-DRIFT != REPAIR AUTHORIZATION
-DIAGNOSTIC FINDING != MUTATION PERMISSION
+Git Adapter → Adapter Facts → WSP Normalizer → Semantic Model
+            → Generic Inspector → Lens/Projection → Terminal or JSON
 ```
 
-The Product must not fabricate unavailable evidence.
+The adapter owns backend facts, not meaning. The Inspector reconciles facts and
+declared relations. A Lens projects; presentation formats. None of these layers
+authorizes or mutates external systems.
 
-## Repository authority split
+## Configuration
 
-```text
-Reference
-= semantic meaning / invariants / conformance expectations
+`wsp init` may create `.wsp/workspace.yaml`. The manifest is Product-owned and
+may declare workspace identity, repositories, projects, and explicit relations.
+It never imports private registries or creates authority, sessions, promotion
+state, or Git mutations. Existing valid manifests are never silently replaced.
 
-Product
-= released implementation behavior / CLI / serialization / releases
+## Excluded from V0
 
-Private Lab
-= private operational truth / dogfooding / experiments
-```
-
-Reference: https://github.com/Sorune/workspace-ops-public
-
-```text
-PRIVATE EXPERIENCE
-!= AUTOMATIC PUBLIC AUTHORITY
-```
-
-## Deferred from P0
-
-```text
-Project registry semantics
-Session claiming
-Acceptance Binding implementation
-Agent Governance
-remote orchestration
-automatic repair
-central daemon
-distributed lease/locking
-deployment mutation
-generic VCS support
-native Windows implementation
-```
-
-These require separate evidence and authorization gates.
+Session Guard, Agent Rule enforcement, provider identity, authority receipts,
+promotion, deployment, lifecycle control, Resource Closure execution, private
+registries, automatic repair, daemon/orchestration, generic VCS, and native
+Windows support.

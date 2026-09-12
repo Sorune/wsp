@@ -1,0 +1,24 @@
+schema_version: 1
+title: WSP local workspace manifest
+type: object
+required: [schema_version, workspace_id, repositories, relations]
+properties:
+  schema_version: {type: integer, const: 1}
+  workspace_id: {type: string, minLength: 1}
+  entities:
+    type: array
+    items: {type: object, required: [id, kind]}
+  projects:
+    type: array
+    items: {type: object, required: [id, name]}
+  repositories:
+    type: array
+    items: {type: object, required: [id, name, path]}
+  relations:
+    type: array
+    items:
+      type: object
+      required: [id, type, from, to]
+      properties:
+        provenance: {type: string}
+        reason: {type: string}
