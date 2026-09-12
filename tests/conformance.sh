@@ -9,6 +9,32 @@ ok() { PASS=$((PASS + 1)); printf 'PASS: %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf 'FAIL: %s\n' "$1" >&2; }
 contains() { case "$1" in *"$2"*) ok "$3";; *) fail "$3";; esac; }
 not_contains() { case "$1" in *"$2"*) fail "$3";; *) ok "$3";; esac; }
+json_failure() {
+  local expected="$1" label="$2" output="$3"
+  case "$output" in
+    \{*\}) ok "$label is JSON-shaped";;
+    *) fail "$label is JSON-shaped"; return;;
+  esac
+  contains "$output" '"schema_version": 1' "$label schema version"
+  contains "$output" '"status": "ERROR"' "$label error status"
+  contains "$output" "\"category\": \"$expected\"" "$label category"
+  not_contains "$output" 'STATUS: BLOCKED' "$label has no Human-only error text"
+}
+run_json_failure() {
+  local expected="$1" label="$2" output rc
+  shift 2
+  if output="$($WSP "$@" --json 2>&1)"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  if [[ "$rc" -eq 0 ]]; then
+    fail "$label exits non-zero"
+  else
+    ok "$label exits non-zero"
+  fi
+  json_failure "$expected" "$label" "$output"
+}
 
 bash -n "$WSP" && ok 'thin shell front door syntax' || fail 'thin shell front door syntax'
 out="$($WSP version)"
@@ -51,6 +77,18 @@ not_contains "$out" 'secret' 'secret not echoed'
 GIT_AFTER="$(git -C "$REPO" status --porcelain)"
 [[ "$GIT_BEFORE" == "" && "$GIT_AFTER" == " M file.txt" ]] && ok 'inspection does not mutate repository' || fail 'inspection mutated repository'
 if "$WSP" repo inspect "$TMP/not-present" >/dev/null 2>&1; then fail 'missing target blocks'; else ok 'missing target blocks'; fi
+run_json_failure TARGET_NOT_FOUND 'missing target JSON error' repo inspect "$TMP/not-present"
+
+NO_REMOTE="$TMP/no-remote"
+git init -q "$NO_REMOTE"
+git -C "$NO_REMOTE" config user.name 'WSP Test'
+git -C "$NO_REMOTE" config user.email 'wsp-test@example.invalid'
+printf 'no remote\n' > "$NO_REMOTE/file.txt"
+git -C "$NO_REMOTE" add file.txt
+git -C "$NO_REMOTE" commit -q -m no-remote
+out="$($WSP repo inspect "$NO_REMOTE" --json)"
+contains "$out" '"id": "repository:unknown"' 'no-origin identity is explicit UNKNOWN'
+not_contains "$out" '"id": "repository:no-remote"' 'no-origin identity does not use basename'
 
 INIT="$TMP/init"
 git init -q "$INIT"
@@ -83,10 +121,12 @@ relations:
     type: "contains"
     from: "project:demo"
     to: "repository:demo"
+    axis: "logical"
   - id: "r1"
     type: "contains"
     from: "workspace:fixture"
     to: "project:demo"
+    axis: "logical"
 EOF
 tree1="$($WSP lens tree "$MANIFEST" --axis logical)"
 tree2="$($WSP lens tree "$MANIFEST" --axis logical)"
@@ -123,18 +163,22 @@ relations:
     type: "contains"
     from: "workspace:session"
     to: "session:demo"
+    axis: "session"
   - id: "s-r"
     type: "repository"
     from: "session:demo"
     to: "repository:demo"
+    axis: "session"
   - id: "s-b"
     type: "branch"
     from: "session:demo"
     to: "branch:demo"
+    axis: "session"
   - id: "b-w"
     type: "worktree"
     from: "branch:demo"
     to: "worktree:demo"
+    axis: "session"
 EOF
 session_json="$($WSP lens tree "$MANIFEST" --axis session --json)"
 contains "$session_json" '"axis": "session"' 'session-style relation projection'
@@ -148,8 +192,10 @@ relations:
     type: "contains"
     from: "workspace:unknown"
     to: "repository:missing"
+    axis: "logical"
 EOF
 if "$WSP" lens tree "$MANIFEST" --axis logical >/dev/null 2>&1; then fail 'unresolved relation silently accepted'; else ok 'unresolved relation fails explicitly'; fi
+run_json_failure INVALID_RELATION 'invalid relation JSON error' lens tree "$MANIFEST" --axis logical
 
 cat > "$MANIFEST/.wsp/workspace.yaml" <<'EOF'
 schema_version: 2
@@ -158,6 +204,8 @@ repositories: []
 relations: []
 EOF
 if "$WSP" lens tree "$MANIFEST" --axis logical >/dev/null 2>&1; then fail 'invalid manifest silently accepted'; else ok 'invalid manifest blocks'; fi
+run_json_failure INVALID_CONFIGURATION 'invalid manifest JSON error' lens tree "$MANIFEST" --axis logical
+run_json_failure INVALID_REQUEST 'invalid axis JSON error' lens tree "$INIT" --axis unsupported
 
 printf 'PASS=%s\nFAIL=%s\n' "$PASS" "$FAIL"
 if [[ "$FAIL" -gt 0 ]]; then printf 'STATUS: FAIL\n'; exit 1; fi

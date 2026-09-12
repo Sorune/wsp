@@ -18,7 +18,16 @@ const version = "0.1.0-dev"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "STATUS: BLOCKED\nREASON: %s\n", err)
+		if hasJSONArg(os.Args[1:]) {
+			doc := inspect.WithError(commandName(os.Args[1:]), errorCategory(err), errorMessage(err))
+			if b, jsonErr := present.JSON(doc); jsonErr == nil {
+				fmt.Println(string(b))
+			} else {
+				fmt.Fprintf(os.Stderr, "STATUS: BLOCKED\nREASON: %s\n", err)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "STATUS: BLOCKED\nREASON: %s\n", err)
+		}
 		os.Exit(exitCode(err))
 	}
 }
@@ -205,7 +214,7 @@ func initCommand(args []string) error {
 		}
 	}
 	if len(m.Repositories) == 1 {
-		m.Relations = []model.Relation{{ID: "contains:" + m.WorkspaceID + ":" + m.Repositories[0].ID, Type: "contains", From: m.WorkspaceID, To: m.Repositories[0].ID, Provenance: model.ProvenanceConfig, Reason: "explicitly initialized workspace relation"}}
+		m.Relations = []model.Relation{{ID: "contains:" + m.WorkspaceID + ":" + m.Repositories[0].ID, Type: "contains", From: m.WorkspaceID, To: m.Repositories[0].ID, Axis: "logical", Provenance: model.ProvenanceConfig, Reason: "explicitly initialized workspace relation"}}
 	}
 	if err := config.Write(root, m); err != nil {
 		return failFor(err)
@@ -293,4 +302,50 @@ func failFor(err error) error {
 		}
 	}
 	return fail(category, msg, code)
+}
+
+func hasJSONArg(args []string) bool {
+	for _, arg := range args {
+		if arg == "--json" {
+			return true
+		}
+	}
+	return false
+}
+
+func commandName(args []string) string {
+	if len(args) == 0 {
+		return "wsp"
+	}
+	if args[0] == "repo" && len(args) > 1 {
+		return "repo." + args[1]
+	}
+	if args[0] == "lens" && len(args) > 1 {
+		return "lens." + args[1]
+	}
+	return args[0]
+}
+
+func errorCategory(err error) string {
+	if e, ok := err.(cliError); ok {
+		return e.category
+	}
+	msg := err.Error()
+	for _, category := range []string{"TARGET_NOT_FOUND", "TARGET_UNAVAILABLE", "INVALID_CONFIGURATION", "INVALID_RELATION", "INVALID_REQUEST", "USAGE"} {
+		if strings.HasPrefix(msg, category) {
+			return category
+		}
+	}
+	return "INTERNAL_FAILURE"
+}
+
+func errorMessage(err error) string {
+	if e, ok := err.(cliError); ok {
+		return e.message
+	}
+	msg := err.Error()
+	if i := strings.Index(msg, ": "); i >= 0 {
+		return msg[i+2:]
+	}
+	return msg
 }

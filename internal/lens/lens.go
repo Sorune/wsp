@@ -30,6 +30,11 @@ func TreeProjection(doc model.Document, axis string) Tree {
 	children := map[string][]model.Relation{}
 	hasParent := map[string]bool{}
 	for _, r := range rels {
+		// Axis membership is declared in the semantic document. It is never
+		// inferred from relation, entity, path, or identifier names.
+		if r.Axis != axis {
+			continue
+		}
 		children[r.From] = append(children[r.From], r)
 		hasParent[r.To] = true
 	}

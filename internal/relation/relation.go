@@ -17,6 +17,12 @@ func Validate(relations []model.Relation, entities []model.Entity) error {
 		if r.ID == "" || r.Type == "" || r.From == "" || r.To == "" {
 			return fmt.Errorf("INVALID_RELATION: relation requires id, type, from, and to")
 		}
+		if r.Axis == "" {
+			return fmt.Errorf("INVALID_RELATION: relation %q requires an observation axis", r.ID)
+		}
+		if r.Axis != "logical" && r.Axis != "session" {
+			return fmt.Errorf("INVALID_RELATION: unsupported observation axis %q", r.Axis)
+		}
 		if seen[r.ID] {
 			return fmt.Errorf("INVALID_RELATION: duplicate relation %q", r.ID)
 		}

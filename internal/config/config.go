@@ -77,6 +77,9 @@ func Write(root string, m Manifest) error {
 		b.WriteString("    type: " + strconv.Quote(r.Type) + "\n")
 		b.WriteString("    from: " + strconv.Quote(r.From) + "\n")
 		b.WriteString("    to: " + strconv.Quote(r.To) + "\n")
+		if r.Axis != "" {
+			b.WriteString("    axis: " + strconv.Quote(r.Axis) + "\n")
+		}
 		if r.Reason != "" {
 			b.WriteString("    reason: " + strconv.Quote(r.Reason) + "\n")
 		}
@@ -229,6 +232,8 @@ func setRelation(r *model.Relation, k, v string) {
 		r.From = v
 	case "to":
 		r.To = v
+	case "axis":
+		r.Axis = v
 	case "reason":
 		r.Reason = v
 	case "provenance":

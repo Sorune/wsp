@@ -18,7 +18,8 @@ properties:
     type: array
     items:
       type: object
-      required: [id, type, from, to]
+      required: [id, type, from, to, axis]
       properties:
+        axis: {type: string, enum: [logical, session]}
         provenance: {type: string}
         reason: {type: string}

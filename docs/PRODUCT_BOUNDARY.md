@@ -25,6 +25,8 @@ OBSERVATION != AUTHORITY
 
 Relations require explicit declarations or accepted adapter evidence. Path,
 name, and directory similarity are not relation evidence.
+Every manifest relation also declares its observation axis (`logical` or
+`session`); Lens never infers axis membership from names or relation types.
 
 ## Read-only pipeline
 

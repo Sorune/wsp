@@ -27,6 +27,7 @@ type Relation struct {
 	Type       string     `json:"type"`
 	From       string     `json:"from"`
 	To         string     `json:"to"`
+	Axis       string     `json:"axis,omitempty"`
 	Provenance Provenance `json:"provenance"`
 	Reason     string     `json:"reason,omitempty"`
 }

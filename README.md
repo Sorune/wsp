@@ -29,6 +29,10 @@ name은 semantic hierarchy로 추론되지 않습니다. Human과 JSON은 같은
 projection을 사용하며 UNKNOWN은 오류나 violation으로 자동 변환되지
 않습니다.
 
+manifest의 각 relation은 관찰 `axis`(`logical` 또는 `session`)를 명시해야
+합니다. Lens traversal은 요청한 축에 선언된 relation만 선택하며 relation,
+entity, 경로, 식별자 이름으로 축을 추론하지 않습니다.
+
 front door는 얇은 POSIX shell이고 semantic 동작은 standard-library-first
 Go core가 담당합니다. V0 지원 대상은 macOS/Linux이며 Windows/PowerShell은
 후속 gate입니다. 구현 중 버전은 `0.1.0-dev`이고 `v0.1.0` release는 별도

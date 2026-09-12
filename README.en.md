@@ -38,6 +38,10 @@ Human and JSON output use the same projection. JSON is deterministic,
 undecorated, and non-interactive. UNKNOWN is a representable observation, not
 automatically an error or violation.
 
+Each manifest relation declares an observation `axis` (`logical` or `session`).
+Lens traversal selects only relations declared for the requested axis; relation
+names, entity names, paths, and identifiers never imply an axis.
+
 ## Runtime and support
 
 The front door is a thin POSIX shell launcher. Semantic behavior is implemented
