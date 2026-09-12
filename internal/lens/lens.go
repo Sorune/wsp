@@ -29,12 +29,15 @@ func TreeProjection(doc model.Document, axis string) Tree {
 	rels := relation.Ordered(doc.Relations)
 	children := map[string][]model.Relation{}
 	hasParent := map[string]bool{}
+	selected := map[string]bool{}
 	for _, r := range rels {
 		// Axis membership is declared in the semantic document. It is never
 		// inferred from relation, entity, path, or identifier names.
 		if r.Axis != axis {
 			continue
 		}
+		selected[r.From] = true
+		selected[r.To] = true
 		children[r.From] = append(children[r.From], r)
 		hasParent[r.To] = true
 	}
@@ -69,7 +72,7 @@ func TreeProjection(doc model.Document, axis string) Tree {
 		return n
 	}
 	roots := []string{}
-	for id := range entities {
+	for id := range selected {
 		if !hasParent[id] {
 			roots = append(roots, id)
 		}
@@ -79,7 +82,7 @@ func TreeProjection(doc model.Document, axis string) Tree {
 	for _, id := range roots {
 		out.Roots = append(out.Roots, makeNode(id, map[string]bool{}))
 	}
-	if len(out.Roots) == 0 && len(entities) > 0 {
+	if len(out.Roots) == 0 && len(selected) > 0 {
 		out.Roots = append(out.Roots, Node{ID: "UNKNOWN", Label: "UNKNOWN", Kind: "UNKNOWN", Unknown: true, Reason: "all declared relations form a cycle"})
 	}
 	return out
