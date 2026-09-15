@@ -15,9 +15,9 @@ read-only adapter이며 promotion, deploy, repair, cleanup, authority를
 
 ## Quick start
 
-현재 V0 development build는 macOS/Linux, Git, Go 1.21+를 전제로 합니다.
-아직 release binary가 없으므로 canonical bootstrap은 WSP source checkout을
-관찰 대상 workspace와 분리해 두는 방식입니다.
+현재 public release binary는 아직 승인되지 않았습니다. source-mode development
+bootstrap은 macOS/Linux, Git, Go 1.21+를 전제로 하며 WSP source checkout을
+관찰 대상 workspace와 분리해 둡니다.
 
 ```bash
 git clone https://github.com/Sorune/wsp.git ~/tools/wsp
@@ -68,6 +68,19 @@ relation은 선언으로만 정해지고 directory name은 semantic hierarchy로
 manifest의 각 relation은 관찰 `axis`(`logical` 또는 `session`)를 명시해야
 합니다. Lens traversal은 요청한 축에 선언된 relation만 선택하며 relation,
 entity, 경로, 식별자 이름으로 축을 추론하지 않습니다.
+
+## Distribution candidate
+
+WSP semantic core는 compiled Go binary로 실행할 때 Go runtime을 요구하지
+않습니다. 현재 V0 runtime dependency는 Git이며, Go는 source-mode fallback과
+build에만 필요합니다.
+
+`Distribution candidate` CI는 release 전 검증용으로 Linux/macOS의 amd64/arm64
+binary archive와 SHA-256 checksum을 만듭니다. CI artifact는 public release가
+아니며 `v0.1.0` tag/release는 별도 Human gate입니다.
+
+상세 경계와 artifact 구성은 [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md)를
+참조합니다.
 
 front door는 얇은 POSIX shell이고 semantic 동작은 standard-library-first
 Go core가 담당합니다. V0 지원 대상은 macOS/Linux이며 Windows/PowerShell은
