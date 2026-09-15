@@ -38,8 +38,9 @@ run_json_failure() {
 
 bash -n "$WSP" && ok 'thin shell front door syntax' || fail 'thin shell front door syntax'
 out="$($WSP version)"
+expected_version="$(cat "$ROOT/VERSION")"
 contains "$out" 'WSP' 'version identity'
-contains "$out" '0.1.0-dev' 'development version'
+contains "$out" "VERSION: $expected_version" 'version matches VERSION file'
 contains "$out" 'Go semantic core' 'runtime boundary'
 out="$($WSP doctor)"
 contains "$out" 'STATUS: PASS' 'doctor pass'
