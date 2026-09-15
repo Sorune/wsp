@@ -195,14 +195,17 @@ func initCommand(args []string) error {
 	if err != nil {
 		return fail("INTERNAL_FAILURE", err.Error(), 1)
 	}
+	createdRoot := false
 	info, err := os.Stat(root)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return fail("TARGET_NOT_FOUND", "workspace root does not exist: "+root, 3)
+		if !os.IsNotExist(err) {
+			return fail("TARGET_UNAVAILABLE", err.Error(), 3)
 		}
-		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
-	}
-	if !info.IsDir() {
+		if err := os.MkdirAll(root, 0755); err != nil {
+			return fail("TARGET_UNAVAILABLE", "workspace root creation failed: "+err.Error(), 3)
+		}
+		createdRoot = true
+	} else if !info.IsDir() {
 		return fail("TARGET_NOT_FOUND", "workspace root is not a directory: "+root, 3)
 	}
 	if _, err := os.Stat(config.Path(root)); err == nil {
@@ -229,7 +232,11 @@ func initCommand(args []string) error {
 	if err := config.Write(root, m); err != nil {
 		return failFor(err)
 	}
-	fmt.Printf("STATUS: INITIALIZED\nMANIFEST: %s\nMUTATION: WSP_CONFIG_ONLY\n", config.Path(root))
+	mutation := "WSP_CONFIG_ONLY"
+	if createdRoot {
+		mutation = "WSP_WORKSPACE_BOOTSTRAP"
+	}
+	fmt.Printf("STATUS: INITIALIZED\nMANIFEST: %s\nMUTATION: %s\n", config.Path(root), mutation)
 	return nil
 }
 
