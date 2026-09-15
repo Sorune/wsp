@@ -16,21 +16,30 @@ read-only adapter이며 promotion, deploy, repair, cleanup, authority를
 ## Quick start
 
 현재 V0 development build는 macOS/Linux, Git, Go 1.21+를 전제로 합니다.
-아직 release binary가 없으므로 canonical bootstrap은 source checkout입니다.
+아직 release binary가 없으므로 canonical bootstrap은 WSP source checkout을
+관찰 대상 workspace와 분리해 두는 방식입니다.
 
 ```bash
 git clone https://github.com/Sorune/wsp.git ~/tools/wsp
 ~/tools/wsp/bin/wsp doctor
 
-cd /path/to/your/repository
-~/tools/wsp/bin/wsp init
-~/tools/wsp/bin/wsp inspect
-~/tools/wsp/bin/wsp lens tree --axis logical
-~/tools/wsp/bin/wsp lens tree --axis logical --json
+# 이미 존재하는 directory를 명시적 Workspace Root로 초기화합니다.
+~/tools/wsp/bin/wsp init /path/to/existing/workspace
+~/tools/wsp/bin/wsp lens tree /path/to/existing/workspace --axis logical
+~/tools/wsp/bin/wsp lens tree /path/to/existing/workspace --axis logical --json
+
+# Git repository의 physical state는 별도로 관찰할 수 있습니다.
+~/tools/wsp/bin/wsp repo inspect /path/to/repository
 ```
 
+`wsp init`은 없는 directory를 자동 생성하지 않습니다. 지정한 기존
+directory 자체가 Git repository일 필요도 없습니다. 대상이 그 자체로 Git
+root이면 현재 관찰 가능한 repository relation을 초기 manifest에 포함할 수
+있지만, 하위 directory 이름이나 repository 구조를 semantic hierarchy로
+자동 추론하지 않습니다.
+
 `doctor`가 PASS이면 이후 명령은 SSH/non-interactive shell에서도 같은 CLI
-surface를 사용합니다. `init`이 수행하는 mutation은 대상 repository의
+surface를 사용합니다. `init`이 수행하는 mutation은 명시한 Workspace Root의
 `.wsp/workspace.yaml` 생성뿐이며 Git history/remote를 변경하지 않습니다.
 
 ```bash

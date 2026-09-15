@@ -195,6 +195,16 @@ func initCommand(args []string) error {
 	if err != nil {
 		return fail("INTERNAL_FAILURE", err.Error(), 1)
 	}
+	info, err := os.Stat(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fail("TARGET_NOT_FOUND", "workspace root does not exist: "+root, 3)
+		}
+		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
+	}
+	if !info.IsDir() {
+		return fail("TARGET_NOT_FOUND", "workspace root is not a directory: "+root, 3)
+	}
 	if _, err := os.Stat(config.Path(root)); err == nil {
 		return fail("INVALID_CONFIGURATION", "manifest already exists", 4)
 	}
@@ -202,19 +212,19 @@ func initCommand(args []string) error {
 	if err != nil {
 		return fail("INTERNAL_FAILURE", err.Error(), 1)
 	}
-	observed, err := inspect.Repository(root)
-	if err != nil {
-		return failFor(err)
-	}
-	for _, entity := range observed.Entities {
-		if entity.Kind == "REPOSITORY" {
-			m.Repositories[0].ID = entity.ID
-			m.Repositories[0].Name = entity.Name
-			break
+
+	// Workspace identity comes from the explicit init target. Repository
+	// observation is optional bootstrap evidence, not Workspace authority.
+	m.Repositories = nil
+	m.Relations = nil
+	if observed, observeErr := inspect.Repository(root); observeErr == nil && filepath.Clean(observed.Target) == filepath.Clean(root) {
+		for _, entity := range observed.Entities {
+			if entity.Kind == "REPOSITORY" {
+				m.Repositories = append(m.Repositories, config.Item{ID: entity.ID, Name: entity.Name, Path: root})
+				m.Relations = append(m.Relations, model.Relation{ID: "contains:" + m.WorkspaceID + ":" + entity.ID, Type: "contains", From: m.WorkspaceID, To: entity.ID, Axis: "logical", Provenance: model.ProvenanceConfig, Reason: "explicitly initialized workspace relation"})
+				break
+			}
 		}
-	}
-	if len(m.Repositories) == 1 {
-		m.Relations = []model.Relation{{ID: "contains:" + m.WorkspaceID + ":" + m.Repositories[0].ID, Type: "contains", From: m.WorkspaceID, To: m.Repositories[0].ID, Axis: "logical", Provenance: model.ProvenanceConfig, Reason: "explicitly initialized workspace relation"}}
 	}
 	if err := config.Write(root, m); err != nil {
 		return failFor(err)
