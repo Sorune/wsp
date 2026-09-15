@@ -41,10 +41,24 @@ authorizes or mutates external systems.
 
 ## Configuration
 
-`wsp init` may create `.wsp/workspace.yaml`. The manifest is Product-owned and
-may declare workspace identity, repositories, projects, and explicit relations.
-It never imports private registries or creates authority, sessions, promotion
-state, or Git mutations. Existing valid manifests are never silently replaced.
+`wsp init [path]` explicitly selects a local WSP Workspace Root.
+
+If the path does not exist, init may create the Workspace Root directory and the
+Product-owned `.wsp/workspace.yaml` as a clean bootstrap UX. If the directory
+already exists, init adopts that directory without replacing its existing
+contents and adds only Product-owned configuration state. The Workspace Root
+does not have to be a Git repository.
+
+If the explicit Workspace Root is itself an observable Git top-level, init may
+record that observed repository and the Workspace-to-Repository relation as
+bootstrap evidence. It does not infer nested repositories, Projects, or logical
+hierarchy from directory names or physical layout. A clean bootstrap does not
+invent repository or Project entities.
+
+The manifest is Product-owned and may declare workspace identity, repositories,
+projects, and explicit relations. It never imports private registries or creates
+authority, sessions, promotion state, or Git mutations. Existing valid manifests
+are never silently replaced.
 
 ## Excluded from V0
 
