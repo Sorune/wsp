@@ -1,0 +1,69 @@
+name: Publish release
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Validate release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION)"
+          case "$version" in
+            ''|*-dev|*[!0-9A-Za-z._-]*)
+              echo "invalid public release version: $version" >&2
+              exit 1
+              ;;
+          esac
+          cli_version="$(go run ./cmd/wsp version | awk '/^VERSION:/ {print $2}')"
+          test "$cli_version" = "$version"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+      - name: Test release commit
+        run: |
+          go test ./...
+          go vet ./...
+          chmod +x tests/selftest.sh scripts/build-dist.sh
+          bash tests/selftest.sh
+      - name: Build release assets
+        run: ./scripts/build-dist.sh "$VERSION"
+      - name: Verify checksums
+        run: |
+          cd dist
+          sha256sum -c SHA256SUMS
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git rev-parse "$TAG" >/dev/null 2>&1 || gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release already exists: $TAG" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "WSP $TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" \
+            dist/wsp_*.tar.gz \
+            dist/SHA256SUMS \
+            --title "WSP $TAG" \
+            --generate-notes
