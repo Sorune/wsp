@@ -1,0 +1,46 @@
+name: Distribution candidate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build distribution candidates
+        run: |
+          chmod +x scripts/build-dist.sh
+          ./scripts/build-dist.sh
+      - name: Verify archive set and checksums
+        run: |
+          test "$(find dist -maxdepth 1 -type f -name 'wsp_*.tar.gz' | wc -l)" -eq 4
+          cd dist
+          sha256sum -c SHA256SUMS
+      - name: Smoke Linux amd64 binary
+        run: |
+          version=$(cat VERSION)
+          mkdir -p /tmp/wsp-dist-smoke
+          tar -C /tmp/wsp-dist-smoke -xzf "dist/wsp_${version}_linux_amd64.tar.gz"
+          "/tmp/wsp-dist-smoke/wsp_${version}_linux_amd64/wsp" version
+          "/tmp/wsp-dist-smoke/wsp_${version}_linux_amd64/wsp" doctor
+      - name: Upload distribution candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsp-dist-candidate
+          path: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
