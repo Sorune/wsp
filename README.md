@@ -13,6 +13,26 @@ Relation, Finding, Provenance, UNKNOWN/reason을 소유합니다. Git은 기본
 read-only adapter이며 promotion, deploy, repair, cleanup, authority를
 수행하지 않습니다. private Workspace Ops에 의존하지 않습니다.
 
+## Quick start
+
+현재 V0 development build는 macOS/Linux, Git, Go 1.21+를 전제로 합니다.
+아직 release binary가 없으므로 canonical bootstrap은 source checkout입니다.
+
+```bash
+git clone https://github.com/Sorune/wsp.git ~/tools/wsp
+~/tools/wsp/bin/wsp doctor
+
+cd /path/to/your/repository
+~/tools/wsp/bin/wsp init
+~/tools/wsp/bin/wsp inspect
+~/tools/wsp/bin/wsp lens tree --axis logical
+~/tools/wsp/bin/wsp lens tree --axis logical --json
+```
+
+`doctor`가 PASS이면 이후 명령은 SSH/non-interactive shell에서도 같은 CLI
+surface를 사용합니다. `init`이 수행하는 mutation은 대상 repository의
+`.wsp/workspace.yaml` 생성뿐이며 Git history/remote를 변경하지 않습니다.
+
 ```bash
 wsp init [path]
 wsp inspect [path] [--json]
