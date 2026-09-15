@@ -1,0 +1,43 @@
+#!/usr/bin/env sh
+# WSP public Product front door. All semantic behavior belongs to the Go core;
+# this file only locates and invokes it.
+set -eu
+
+SOURCE=$0
+while [ -L "$SOURCE" ]; do
+	SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd -P)
+	SOURCE_LINK=$(readlink "$SOURCE")
+	case "$SOURCE_LINK" in
+		/*) SOURCE=$SOURCE_LINK ;;
+		*) SOURCE=$SOURCE_DIR/$SOURCE_LINK ;;
+	esac
+done
+BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd -P)
+WSP_ROOT=${WSP_ROOT:-$(CDPATH= cd -- "$BIN_DIR/.." && pwd -P)}
+CALLER_PWD=$(pwd -P)
+JSON_MODE=0
+for ARG in "$@"; do
+	if [ "$ARG" = "--json" ]; then
+		JSON_MODE=1
+		break
+	fi
+done
+
+if [ -n "${WSP_BIN:-}" ] && [ -x "$WSP_BIN" ]; then
+	exec env WSP_CALLER_PWD="$CALLER_PWD" "$WSP_BIN" "$@"
+fi
+
+if [ -x "$WSP_ROOT/.wsp/bin/wsp" ]; then
+	exec env WSP_CALLER_PWD="$CALLER_PWD" "$WSP_ROOT/.wsp/bin/wsp" "$@"
+fi
+
+if command -v go >/dev/null 2>&1; then
+	cd "$WSP_ROOT"
+	if [ "$JSON_MODE" -eq 1 ]; then
+		exec env WSP_CALLER_PWD="$CALLER_PWD" go run ./cmd/wsp "$@" 2>/dev/null
+	fi
+	exec env WSP_CALLER_PWD="$CALLER_PWD" go run ./cmd/wsp "$@"
+fi
+
+printf 'STATUS: BLOCKED\nREASON: MISSING_RUNTIME:go\n' >&2
+exit 1
