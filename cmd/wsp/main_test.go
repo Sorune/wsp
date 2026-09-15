@@ -28,16 +28,26 @@ func TestInitExistingNonGitWorkspace(t *testing.T) {
 	}
 }
 
-func TestInitMissingWorkspaceDoesNotCreateDirectory(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "missing")
-	err := initCommand([]string{root})
-	if err == nil {
-		t.Fatal("init unexpectedly created a missing workspace root")
+func TestInitMissingWorkspaceCreatesCleanRoot(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "new-workspace")
+	if err := initCommand([]string{root}); err != nil {
+		t.Fatalf("init clean workspace: %v", err)
 	}
-	if got := errorCategory(err); got != "TARGET_NOT_FOUND" {
-		t.Fatalf("unexpected error category: %s (%v)", got, err)
+	info, err := os.Stat(root)
+	if err != nil {
+		t.Fatalf("created workspace root missing: %v", err)
 	}
-	if _, statErr := os.Stat(root); !os.IsNotExist(statErr) {
-		t.Fatalf("missing workspace root was mutated: %v", statErr)
+	if !info.IsDir() {
+		t.Fatal("created workspace root is not a directory")
+	}
+	m, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load clean workspace manifest: %v", err)
+	}
+	if len(m.Repositories) != 0 {
+		t.Fatalf("clean workspace invented repositories: %+v", m.Repositories)
+	}
+	if len(m.Relations) != 0 {
+		t.Fatalf("clean workspace invented relations: %+v", m.Relations)
 	}
 }
