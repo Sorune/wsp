@@ -20,23 +20,35 @@ promotion, lifecycle, or Resource Closure implementations.
 
 ## Quick start
 
-A public release binary has not been authorized yet. Source-mode development
-bootstrap currently targets macOS/Linux and requires Git plus Go 1.21+.
-Keep the WSP source checkout separate from the workspace it observes.
+`v0.1.0` is the first public WSP release. A compiled WSP binary does not require
+a Go runtime; the current V0 runtime dependency is Git.
+
+Download the archive matching your operating system and architecture from the
+GitHub Release, place the `wsp` binary on your PATH, and start with `wsp doctor`.
+
+```text
+wsp_0.1.0_linux_amd64.tar.gz
+wsp_0.1.0_linux_arm64.tar.gz
+wsp_0.1.0_darwin_amd64.tar.gz
+wsp_0.1.0_darwin_arm64.tar.gz
+SHA256SUMS
+```
 
 ```bash
-git clone https://github.com/Sorune/wsp.git ~/tools/wsp
-~/tools/wsp/bin/wsp doctor
+wsp doctor
 
 # Clean bootstrap: a missing path is created as a new Workspace Root.
-~/tools/wsp/bin/wsp init /path/to/new/workspace
+wsp init /path/to/new/workspace
 
 # Adoption: an existing directory is preserved and receives WSP config only.
-~/tools/wsp/bin/wsp init /path/to/existing/workspace
+wsp init /path/to/existing/workspace
 
-~/tools/wsp/bin/wsp lens tree /path/to/existing/workspace --axis logical
-~/tools/wsp/bin/wsp repo inspect /path/to/repository
+wsp lens tree /path/to/existing/workspace --axis logical
+wsp repo inspect /path/to/repository
 ```
+
+Source-mode development still requires Go 1.21+, and the WSP source checkout
+should remain separate from the workspace it observes.
 
 The Workspace Root does not have to be a Git repository. If the explicit root is
 itself an observable Git top-level, init may record that repository relation as
@@ -68,14 +80,14 @@ Each manifest relation declares an observation `axis` (`logical` or `session`).
 Lens traversal selects only relations declared for the requested axis; relation
 names, entity names, paths, and identifiers never imply an axis.
 
-## Distribution candidate
+## Distribution
 
 A compiled WSP binary does not require a Go runtime. The current V0 runtime
 dependency is Git; Go is needed only for builds and source-mode fallback.
 
-The `Distribution candidate` CI builds Linux/macOS archives for amd64/arm64 and
-emits SHA-256 checksums. These CI artifacts are validation evidence, not a public
-release. See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
+The release pipeline builds and verifies Linux/macOS archives for amd64/arm64,
+emits SHA-256 checksums, and publishes the accepted assets to the GitHub Release.
+See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 ## Runtime and support
 
@@ -83,8 +95,7 @@ The source checkout includes a thin POSIX shell launcher. Semantic behavior is
 implemented by a standard-library-first Go core. V0 targets macOS and Linux;
 native Windows and PowerShell are deferred.
 
-During implementation the version is `0.1.0-dev`. A `v0.1.0` tag/release is a
-separate Human gate.
+The current public version is `0.1.0`.
 
 ## Development
 

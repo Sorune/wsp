@@ -1,6 +1,6 @@
 # WSP distribution boundary
 
-Status: distribution foundation candidate; public release not authorized.
+Status: `v0.1.0` public release authorized.
 
 ## Runtime model
 
@@ -20,7 +20,7 @@ Go
 = build/source-mode dependency
 ```
 
-## Candidate artifacts
+## Release artifacts
 
 `scripts/build-dist.sh` builds the current supported V0 platform set:
 
@@ -36,23 +36,37 @@ also emits `SHA256SUMS`.
 
 The `Distribution candidate` GitHub Actions workflow validates the archive set,
 checks checksums, smoke-tests the Linux amd64 binary, and uploads the outputs as
-a CI artifact.
+a CI artifact for pre-release evidence.
 
-CI artifact creation is validation evidence only.
+The `Publish release` workflow is the release mutation owner. A release-version
+change merged to `main` triggers release validation, rebuilds and verifies the
+same asset set, creates the matching `v<version>` tag, and publishes a GitHub
+Release with the archives and `SHA256SUMS`.
 
 ```text
 CI ARTIFACT
 != GITHUB RELEASE
-!= RELEASE ACCEPTANCE
-!= PROMOTION AUTHORIZATION
+
+ACCEPTED RELEASE COMMIT
++ PUBLISH RELEASE WORKFLOW
+= TAG + GITHUB RELEASE + VERIFIED ASSETS
 ```
 
-## Release gate
+## v0.1.0 acceptance evidence
 
-Creating a version tag, GitHub Release, or declaring `v0.1.0` public remains a
-separate Human gate. This foundation does not create tags, publish releases, or
-modify deployment/promotion state.
+Before the release gate was opened, the distribution foundation passed:
 
-A future accepted release should verify a compiled binary on a clean target
-machine without relying on an installed Go toolchain before the release gate is
-opened.
+- Product P0 validation on Ubuntu and macOS.
+- Four-platform archive build and SHA-256 verification.
+- Linux amd64 compiled-binary CI smoke testing.
+- Physical Ubuntu dogfood with Go hidden from runtime PATH: 16 PASS / 0 FAIL.
+
+This evidence demonstrates that Go is a build/source-mode dependency rather than
+a compiled WSP runtime dependency.
+
+## Release authority
+
+Release, tag, and public asset publication are authority-bearing mutations. They
+require an explicit Human release gate. The `v0.1.0` gate was explicitly opened
+before the release branch was prepared; the workflow does not independently
+choose a version or widen product scope.
