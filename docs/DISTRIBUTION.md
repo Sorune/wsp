@@ -1,6 +1,6 @@
 # WSP distribution boundary
 
-Status: `v0.1.0` public release authorized.
+Status: `v0.1.0` public release authorized and published.
 
 ## Runtime model
 
@@ -59,9 +59,37 @@ Before the release gate was opened, the distribution foundation passed:
 - Product P0 validation on Ubuntu and macOS.
 - Four-platform archive build and SHA-256 verification.
 - Linux amd64 compiled-binary CI smoke testing.
-- Physical Ubuntu dogfood with Go hidden from runtime PATH: 16 PASS / 0 FAIL.
+- Physical Ubuntu source-mode dogfood: 21 PASS / 0 FAIL.
+- Physical Ubuntu compiled-binary dogfood with Go hidden from runtime PATH: 16 PASS / 0 FAIL.
 
-This evidence demonstrates that Go is a build/source-mode dependency rather than
+After publication, the actual public release path was independently exercised on
+a BC250 Ubuntu host using the published `wsp_0.1.0_linux_amd64.tar.gz` and
+published `SHA256SUMS`, rather than a locally built or CI-only artifact.
+
+The external-install smoke verified:
+
+- GitHub Release asset download.
+- Published SHA-256 checksum verification.
+- Archive extraction and executable bit.
+- `VERSION: 0.1.0` identity with no `-dev` marker.
+- Runtime operation with Go hidden from `PATH` while Git remained available.
+- `wsp doctor`.
+- Clean Workspace bootstrap and logical Lens projection.
+- Git-root Workspace initialization, repository inspection, and logical Lens projection.
+- Git HEAD unchanged across WSP initialization/observation.
+
+Result:
+
+```text
+BC250 PUBLIC RELEASE SMOKE
+PASS=19
+FAIL=0
+STATUS: PASS
+```
+
+This evidence closes the `v0.1.0` public distribution path from accepted release
+commit through published GitHub Release artifact to a separate physical runtime
+host. It also demonstrates that Go is a build/source-mode dependency rather than
 a compiled WSP runtime dependency.
 
 ## Release authority
@@ -70,3 +98,6 @@ Release, tag, and public asset publication are authority-bearing mutations. They
 require an explicit Human release gate. The `v0.1.0` gate was explicitly opened
 before the release branch was prepared; the workflow does not independently
 choose a version or widen product scope.
+
+Historical validation evidence does not replace current Git, release, runtime,
+or Project authority.
