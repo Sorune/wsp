@@ -14,7 +14,7 @@ import (
 	"github.com/Sorune/wsp/internal/present"
 )
 
-const version = "0.1.0-dev"
+const version = "0.1.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
