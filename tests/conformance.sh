@@ -9,6 +9,12 @@ ok() { PASS=$((PASS + 1)); printf 'PASS: %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf 'FAIL: %s\n' "$1" >&2; }
 contains() { case "$1" in *"$2"*) ok "$3";; *) fail "$3";; esac; }
 not_contains() { case "$1" in *"$2"*) fail "$3";; *) ok "$3";; esac; }
+json_array_keys() {
+  local output="$1" label="$2" key
+  for key in entities relations findings unknowns errors; do
+    contains "$output" "\"$key\": [" "$label $key array"
+  done
+}
 json_failure() {
   local expected="$1" label="$2" output="$3"
   case "$output" in
@@ -141,6 +147,31 @@ contains "$json1" '"axis": "logical"' 'logical tree JSON projection'
 contains "$json1" 'DemoRepo' 'same relation source reaches JSON'
 
 if "$WSP" inspect "$REPO" --json >/dev/null 2>&1; then ok 'inspect JSON command succeeds'; else fail 'inspect JSON command failed'; fi
+inspect_json="$($WSP repo inspect "$REPO" --json)"
+contains "$inspect_json" '"schema_version": 1' 'inspect JSON schema version'
+contains "$inspect_json" '"command": "repo.inspect"' 'repo inspect JSON command'
+contains "$inspect_json" '"status": "OK"' 'inspect JSON success status'
+contains "$inspect_json" '"entities": [' 'inspect JSON entity array present'
+contains "$inspect_json" '"relations": [' 'inspect JSON relation array present'
+contains "$inspect_json" '"findings": [' 'inspect JSON findings array present'
+contains "$inspect_json" '"unknowns": [' 'inspect JSON unknowns array present'
+contains "$inspect_json" '"errors": []' 'inspect JSON empty errors array'
+
+EMPTY="$TMP/manifestless"
+mkdir -p "$EMPTY"
+if empty_lens_json="$($WSP lens tree "$EMPTY" --axis logical --json 2>&1)"; then
+  fail 'manifestless lens JSON exits non-zero'
+else
+  ok 'manifestless lens JSON exits non-zero'
+fi
+contains "$empty_lens_json" '"schema_version": 1' 'empty lens JSON schema version'
+contains "$empty_lens_json" '"command": "lens.tree"' 'empty lens JSON command'
+contains "$empty_lens_json" '"status": "ERROR"' 'manifestless lens JSON error status'
+json_array_keys "$empty_lens_json" 'manifestless lens JSON'
+contains "$empty_lens_json" '"entities": []' 'manifestless lens JSON empty entities'
+contains "$empty_lens_json" '"errors": [' 'manifestless lens JSON error details'
+contains "$empty_lens_json" '"category": "TARGET_UNAVAILABLE"' 'manifestless lens JSON error category'
+run_json_failure TARGET_UNAVAILABLE 'manifestless lens JSON error' lens tree "$EMPTY" --axis logical
 
 cat > "$MANIFEST/.wsp/workspace.yaml" <<'EOF'
 schema_version: 1
