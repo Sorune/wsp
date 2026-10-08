@@ -51,3 +51,28 @@ func TestInitMissingWorkspaceCreatesCleanRoot(t *testing.T) {
 		t.Fatalf("clean workspace invented relations: %+v", m.Relations)
 	}
 }
+
+func TestTargetPathUsesCallerDirectory(t *testing.T) {
+	caller := t.TempDir()
+	t.Setenv("WSP_CALLER_PWD", caller)
+	got := targetPath(filepath.Join("child", "..", "repo"))
+	want := filepath.Join(caller, "repo")
+	if got != want {
+		t.Fatalf("targetPath caller-relative mismatch: got %q want %q", got, want)
+	}
+	absolute := filepath.Join(t.TempDir(), "absolute")
+	if got := targetPath(absolute); got != filepath.Clean(absolute) {
+		t.Fatalf("absolute target changed: got %q want %q", got, filepath.Clean(absolute))
+	}
+}
+
+func TestInitHelpDoesNotMutate(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("WSP_CALLER_PWD", root)
+	if err := run([]string{"init", "--help"}); err != nil {
+		t.Fatalf("init --help: %v", err)
+	}
+	if _, err := os.Stat(config.Path(root)); !os.IsNotExist(err) {
+		t.Fatalf("init --help mutated workspace: stat err=%v", err)
+	}
+}

@@ -27,10 +27,10 @@ Download the archive matching your operating system and architecture from the
 GitHub Release, place the `wsp` binary on your PATH, and start with `wsp doctor`.
 
 ```text
-wsp_0.1.0_linux_amd64.tar.gz
-wsp_0.1.0_linux_arm64.tar.gz
-wsp_0.1.0_darwin_amd64.tar.gz
-wsp_0.1.0_darwin_arm64.tar.gz
+wsp_0.1.1_linux_amd64.tar.gz
+wsp_0.1.1_linux_arm64.tar.gz
+wsp_0.1.1_darwin_amd64.tar.gz
+wsp_0.1.1_darwin_arm64.tar.gz
 SHA256SUMS
 ```
 
@@ -69,8 +69,10 @@ wsp version
 ```
 
 `wsp init` owns only Workspace bootstrap/config mutation. It does not modify Git
-history or remotes. Relations are declared; directory names are not treated as
-semantic hierarchy.
+history or remotes. Relative target paths are resolved from the calling directory,
+not the WSP source checkout. Relations are declared; directory names are not treated
+as semantic hierarchy. See [`docs/USAGE.md`](docs/USAGE.md) for the multi-repository
+manifest recipe and command-selection guidance.
 
 Human and JSON output use the same projection. JSON is deterministic,
 undecorated, and non-interactive. UNKNOWN is a representable observation, not
@@ -95,7 +97,7 @@ The source checkout includes a thin POSIX shell launcher. Semantic behavior is
 implemented by a standard-library-first Go core. V0 targets macOS and Linux;
 native Windows and PowerShell are deferred.
 
-The current public version is `0.1.0`.
+The current public version is `0.1.1`.
 
 ## Development
 

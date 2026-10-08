@@ -55,7 +55,11 @@ func Write(root string, m Manifest) error {
 	var b strings.Builder
 	b.WriteString("schema_version: 1\n")
 	b.WriteString("workspace_id: " + strconv.Quote(m.WorkspaceID) + "\n")
-	b.WriteString("repositories:\n")
+	if len(m.Repositories) == 0 {
+		b.WriteString("repositories: []\n")
+	} else {
+		b.WriteString("repositories:\n")
+	}
 	for _, item := range m.Repositories {
 		b.WriteString("  - id: " + strconv.Quote(item.ID) + "\n")
 		b.WriteString("    name: " + strconv.Quote(item.Name) + "\n")
@@ -71,7 +75,11 @@ func Write(root string, m Manifest) error {
 			b.WriteString("    name: " + strconv.Quote(item.Name) + "\n")
 		}
 	}
-	b.WriteString("relations:\n")
+	if len(m.Relations) == 0 {
+		b.WriteString("relations: []\n")
+	} else {
+		b.WriteString("relations:\n")
+	}
 	for _, r := range m.Relations {
 		b.WriteString("  - id: " + strconv.Quote(r.ID) + "\n")
 		b.WriteString("    type: " + strconv.Quote(r.Type) + "\n")

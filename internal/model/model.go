@@ -51,12 +51,12 @@ type Document struct {
 	Command       string     `json:"command"`
 	Status        string     `json:"status"`
 	Target        string     `json:"target,omitempty"`
-	Entities      []Entity   `json:"entities,omitempty"`
-	Relations     []Relation `json:"relations,omitempty"`
-	Findings      []Finding  `json:"findings,omitempty"`
-	Unknowns      []Unknown  `json:"unknowns,omitempty"`
+	Entities      []Entity   `json:"entities"`
+	Relations     []Relation `json:"relations"`
+	Findings      []Finding  `json:"findings"`
+	Unknowns      []Unknown  `json:"unknowns"`
 	Projection    any        `json:"projection,omitempty"`
-	Errors        []Error    `json:"errors,omitempty"`
+	Errors        []Error    `json:"errors"`
 }
 
 type Error struct {

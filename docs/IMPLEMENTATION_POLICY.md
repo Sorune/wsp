@@ -20,9 +20,10 @@ gate.
 
 ## Distribution
 
-The implementation version during this candidate is `0.1.0-dev`. V0 targets
-macOS and Linux. Windows/PowerShell is deferred. Release packaging, tags,
-public compatibility freeze, and `v0.1.0` release require separate acceptance.
+The current public maintenance release line is `0.1.1`. V0 targets macOS and
+Linux. Windows/PowerShell is deferred. Release packaging, tags, and public asset
+publication remain Human-gated mutations and use the validated distribution
+path documented in `docs/DISTRIBUTION.md`.
 
 ## Safety
 
