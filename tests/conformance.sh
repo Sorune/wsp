@@ -111,6 +111,20 @@ contains "$out" 'STATUS: INITIALIZED' 'init creates manifest'
 [[ "$(git -C "$INIT" rev-parse HEAD)" == "$INIT_HEAD" ]] && ok 'init does not mutate Git history' || fail 'init mutated Git history'
 if "$WSP" init "$INIT" >/dev/null 2>&1; then fail 'existing manifest was overwritten'; else ok 'existing manifest is preserved'; fi
 
+HELP_ROOT="$TMP/help-only"
+mkdir -p "$HELP_ROOT"
+if (cd "$HELP_ROOT" && "$WSP" init --help >/dev/null); then ok 'init --help succeeds'; else fail 'init --help failed'; fi
+[[ ! -e "$HELP_ROOT/.wsp" ]] && ok 'init --help performs no mutation' || fail 'init --help mutated workspace'
+
+EMPTY_ROOT="$TMP/empty-workspace"
+mkdir -p "$EMPTY_ROOT"
+"$WSP" init "$EMPTY_ROOT" >/dev/null
+grep -qx 'repositories: \[\]' "$EMPTY_ROOT/.wsp/workspace.yaml" && ok 'empty repositories serialize as []' || fail 'empty repositories are not []'
+grep -qx 'relations: \[\]' "$EMPTY_ROOT/.wsp/workspace.yaml" && ok 'empty relations serialize as []' || fail 'empty relations are not []'
+
+relative_json="$(cd "$TMP" && "$WSP" repo inspect repo --json)"
+contains "$relative_json" "\"revision\": \"$HEAD_BEFORE\"" 'caller-relative repository target'
+
 MANIFEST="$TMP/manifest"
 mkdir -p "$MANIFEST/.wsp"
 cat > "$MANIFEST/.wsp/workspace.yaml" <<'EOF'
