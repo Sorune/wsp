@@ -22,10 +22,10 @@ GitHub Release에서 운영체제/아키텍처에 맞는 archive를 받아 `wsp`
 PATH에 두고 시작합니다.
 
 ```text
-wsp_0.1.0_linux_amd64.tar.gz
-wsp_0.1.0_linux_arm64.tar.gz
-wsp_0.1.0_darwin_amd64.tar.gz
-wsp_0.1.0_darwin_arm64.tar.gz
+wsp_0.1.1_linux_amd64.tar.gz
+wsp_0.1.1_linux_arm64.tar.gz
+wsp_0.1.1_darwin_amd64.tar.gz
+wsp_0.1.1_darwin_arm64.tar.gz
 SHA256SUMS
 ```
 
@@ -74,6 +74,9 @@ wsp doctor
 wsp version
 ```
 
+상대 target path는 WSP source checkout이 아니라 명령을 호출한 directory 기준으로 해석됩니다.
+멀티-repository manifest 작성법과 command 선택 기준은 [`docs/USAGE.md`](docs/USAGE.md)를 참조합니다.
+
 relation은 선언으로만 정해지고 directory name은 semantic hierarchy로
 추론되지 않습니다. Human과 JSON은 같은 projection을 사용하며 UNKNOWN은
 오류나 violation으로 자동 변환되지 않습니다.
@@ -95,7 +98,7 @@ release pipeline은 Linux/macOS의 amd64/arm64 binary archive와 SHA-256 checksu
 front door는 source checkout에서 사용하는 얇은 POSIX shell이고 semantic
 동작은 standard-library-first Go core가 담당합니다. V0 지원 대상은
 macOS/Linux이며 Windows/PowerShell은 후속 gate입니다. 현재 public version은
-`0.1.0`입니다.
+`0.1.1`입니다.
 
 ```bash
 go test ./...

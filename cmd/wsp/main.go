@@ -14,7 +14,7 @@ import (
 	"github.com/Sorune/wsp/internal/present"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -49,7 +49,7 @@ func exitCode(err error) int {
 }
 
 func run(args []string) error {
-	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
+	if len(args) == 0 || args[0] == "help" || hasHelpArg(args) {
 		usage()
 		return nil
 	}
@@ -79,18 +79,14 @@ func run(args []string) error {
 				return fail("USAGE", "repo inspect [path] [--json]", 2)
 			}
 		}
-		if path == "." {
-			path = callerPath()
-		}
+		path = targetPath(path)
 		return inspectCommand("repo.inspect", path, flags, false)
 	case "inspect":
 		path, flags, err := targetAndFlags(args[1:])
 		if err != nil {
 			return err
 		}
-		if path == "." {
-			path = callerPath()
-		}
+		path = targetPath(path)
 		return inspectCommand("inspect", path, flags, true)
 	case "lens":
 		return lensCommand(args[1:])
@@ -101,8 +97,42 @@ func run(args []string) error {
 	}
 }
 
+func hasHelpArg(args []string) bool {
+	for _, arg := range args {
+		if arg == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
 func usage() {
-	fmt.Print("Usage: wsp <command> [args]\n\nCommands:\n  init [path]\n  inspect [path] [--json]\n  repo inspect [path]\n  lens tree [path] --axis logical|session [--json]\n  status\n  doctor\n  version\n")
+	fmt.Print(`Usage: wsp <command> [args]
+
+Commands:
+  repo inspect [target] [--json]  Git facts for one repository (preferred)
+  inspect [target] [--json]       Git facts via the compatibility command
+  status [--json]                 Git facts for the calling repository
+  lens tree [target] --axis logical|session [--json]
+                                  Project declared manifest relations
+  init [target]                   Create .wsp/workspace.yaml (mutates target)
+  doctor                          Check local runtime prerequisites
+  version                         Print version
+
+repo inspect and inspect default to the calling directory; target may be an
+absolute or caller-relative path. status has no target argument and always uses
+the calling directory.
+These three commands observe Git facts and do not require a WSP manifest.
+lens defaults to the calling directory, which must contain
+.wsp/workspace.yaml. It projects declared relations for the selected axis and
+does not infer logical structure from filesystem layout. --json emits a stable
+JSON envelope for repo inspect, inspect, status, and lens tree.
+init defaults to the calling directory. It creates .wsp/workspace.yaml and may
+create the target directory when missing. Init has no JSON mode. All commands
+except init are read-only. Help never executes a command.
+
+Use --help anywhere in a command to show this help before command execution.
+`)
 }
 
 func doctor(args []string) error {
@@ -171,6 +201,7 @@ func lensCommand(args []string) error {
 	if axis == "" {
 		return fail("USAGE", "lens tree requires --axis logical|session", 2)
 	}
+	path = targetPath(path)
 	doc, tree, err := inspect.Tree(path, axis)
 	if err != nil {
 		return failFor(err)
@@ -188,9 +219,7 @@ func initCommand(args []string) error {
 	if len(args) == 1 {
 		root = args[0]
 	}
-	if root == "." {
-		root = callerPath()
-	}
+	root = targetPath(root)
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return fail("INTERNAL_FAILURE", err.Error(), 1)
@@ -238,6 +267,16 @@ func initCommand(args []string) error {
 	}
 	fmt.Printf("STATUS: INITIALIZED\nMANIFEST: %s\nMUTATION: %s\n", config.Path(root), mutation)
 	return nil
+}
+
+func targetPath(target string) string {
+	if target == "" {
+		target = "."
+	}
+	if filepath.IsAbs(target) {
+		return filepath.Clean(target)
+	}
+	return filepath.Clean(filepath.Join(callerPath(), target))
 }
 
 func callerPath() string {
