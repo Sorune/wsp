@@ -1,0 +1,21 @@
+schema_version: 1
+title: WSP Scanner optional Lens reference map
+type: object
+required: [id]
+properties:
+  id: {type: string, minLength: 1}
+  bindings:
+    type: array
+    items:
+      type: object
+      required: [lens_node, coordinate]
+  groups:
+    type: array
+    items:
+      type: object
+      required: [lens_node, coordinate_prefix]
+  relations:
+    type: array
+    items:
+      type: object
+      required: [id, from, to]

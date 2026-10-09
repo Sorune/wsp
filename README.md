@@ -22,10 +22,10 @@ GitHub Release에서 운영체제/아키텍처에 맞는 archive를 받아 `wsp`
 PATH에 두고 시작합니다.
 
 ```text
-wsp_0.1.1_linux_amd64.tar.gz
-wsp_0.1.1_linux_arm64.tar.gz
-wsp_0.1.1_darwin_amd64.tar.gz
-wsp_0.1.1_darwin_arm64.tar.gz
+wsp_0.2.0_linux_amd64.tar.gz
+wsp_0.2.0_linux_arm64.tar.gz
+wsp_0.2.0_darwin_amd64.tar.gz
+wsp_0.2.0_darwin_arm64.tar.gz
 SHA256SUMS
 ```
 
@@ -69,6 +69,9 @@ wsp init [path]
 wsp inspect [path] [--json]
 wsp repo inspect [path] [--json]
 wsp lens tree [path] --axis logical|session [--json]
+wsp scanner scan <repository> --subject-id ID [--artifact snapshot|candidates|both]
+wsp scanner view --input FILE [--level L0|L1|L2|L3] [...]
+wsp scanner compare --baseline FILE --current FILE [--reference FILE]
 wsp status [--json]
 wsp doctor
 wsp version
@@ -85,6 +88,12 @@ manifest의 각 relation은 관찰 `axis`(`logical` 또는 `session`)를 명시�
 합니다. Lens traversal은 요청한 축에 선언된 relation만 선택하며 relation,
 entity, 경로, 식별자 이름으로 축을 추론하지 않습니다.
 
+Scanner는 Lens 초기 보정·refresh·구조 drift 검토를 위한 **optional read-only
+capability**입니다. 일반 WSP/Lens 사용에는 필요하지 않으며 scan 결과가
+architecture나 authority가 되지 않습니다. `scan → bounded view → compare`는
+semantic source를 자동 수정하지 않습니다. 자세한 계약과 사용법은
+[`docs/SCANNER.md`](docs/SCANNER.md)를 참조합니다.
+
 ## Distribution
 
 WSP semantic core는 compiled Go binary로 실행할 때 Go runtime을 요구하지
@@ -98,7 +107,7 @@ release pipeline은 Linux/macOS의 amd64/arm64 binary archive와 SHA-256 checksu
 front door는 source checkout에서 사용하는 얇은 POSIX shell이고 semantic
 동작은 standard-library-first Go core가 담당합니다. V0 지원 대상은
 macOS/Linux이며 Windows/PowerShell은 후속 gate입니다. 현재 public version은
-`0.1.1`입니다.
+`0.2.0`입니다.
 
 ```bash
 go test ./...

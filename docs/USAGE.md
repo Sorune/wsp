@@ -12,6 +12,9 @@ target is omitted, it uses the calling directory.
 | `wsp inspect [target] [--json]` | One Git repository; caller directory | None | `--json` | No |
 | `wsp status [--json]` | Calling Git repository; no target argument | None | `--json` | No |
 | `wsp lens tree [target] --axis logical\|session [--json]` | Manifest workspace root; caller directory | `.wsp/workspace.yaml` | `--json` | No |
+| `wsp scanner scan <repository> --subject-id ID [--artifact ...]` | One repository root; explicit target | None | Scanner JSON | No |
+| `wsp scanner view --input FILE [--level ...]` | Combined Scanner artifact | None | Scanner JSON | No |
+| `wsp scanner compare --baseline FILE --current FILE [--reference FILE]` | Two compatible Scanner artifacts | Reference optional | Scanner JSON | No |
 | `wsp init [target]` | Directory; caller directory | None; creates manifest | Not offered | Yes, creates `.wsp/workspace.yaml`; creates target directory if missing |
 
 `repo inspect` is the direct command for Git facts about one repository. The
@@ -23,6 +26,24 @@ stable JSON envelope for `repo inspect`, `inspect`, `status`, and `lens tree`.
 
 `--help` anywhere in a command displays help before command execution. `wsp
 help` displays the same help. `init` has no JSON mode.
+
+## Optional Scanner workflow
+
+Scanner is not part of every task. Use it when an existing Lens/reference may be
+stale, when initial calibration is needed, or when a bounded structural diff is
+more useful than re-reading an entire repository.
+
+```sh
+wsp scanner scan /path/to/repo --subject-id repository:demo --artifact both > before.json
+# after repository structure changes
+wsp scanner scan /path/to/repo --subject-id repository:demo --artifact both > after.json
+wsp scanner compare --baseline before.json --current after.json > drift.json
+wsp scanner view --input after.json --level L2 --prefix packages/public
+```
+
+The raw artifact remains provenance. Prefer bounded `view` or `compare` output
+for AI context. Scanner never initializes a workspace, updates Lens, or accepts
+a calibration. See [`SCANNER.md`](SCANNER.md).
 
 ## Manifest example
 

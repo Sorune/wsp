@@ -14,7 +14,7 @@ import (
 	"github.com/Sorune/wsp/internal/present"
 )
 
-const version = "0.1.1"
+const version = "0.2.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -90,6 +90,8 @@ func run(args []string) error {
 		return inspectCommand("inspect", path, flags, true)
 	case "lens":
 		return lensCommand(args[1:])
+	case "scanner":
+		return scannerCommand(args[1:])
 	case "init":
 		return initCommand(args[1:])
 	default:
@@ -115,6 +117,12 @@ Commands:
   status [--json]                 Git facts for the calling repository
   lens tree [target] --axis logical|session [--json]
                                   Project declared manifest relations
+  scanner scan <repository> --subject-id ID [--artifact snapshot|candidates|both]
+                                  Optional mechanical repository observation
+  scanner view --input FILE [--level L0|L1|L2|L3] [...]
+                                  Bounded AI-facing Scanner projection
+  scanner compare --baseline FILE --current FILE [--reference FILE]
+                                  Bounded structural-drift projection
   init [target]                   Create .wsp/workspace.yaml (mutates target)
   doctor                          Check local runtime prerequisites
   version                         Print version
@@ -127,6 +135,9 @@ lens defaults to the calling directory, which must contain
 .wsp/workspace.yaml. It projects declared relations for the selected axis and
 does not infer logical structure from filesystem layout. --json emits a stable
 JSON envelope for repo inspect, inspect, status, and lens tree.
+Scanner commands are explicit, optional, read-only observation surfaces. They
+never update Lens, semantic declarations, references, or project state. Scanner
+JSON is a separate observation contract, not the WSP semantic envelope.
 init defaults to the calling directory. It creates .wsp/workspace.yaml and may
 create the target directory when missing. Init has no JSON mode. All commands
 except init are read-only. Help never executes a command.
