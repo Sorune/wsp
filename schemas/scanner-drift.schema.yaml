@@ -1,0 +1,37 @@
+schema_version: 1
+title: WSP Scanner drift projection
+type: object
+required:
+  - projection_model
+  - baseline
+  - current
+  - digest_changed
+  - candidate_deltas
+  - relocation_hypotheses
+  - review_required_changed_coordinates
+  - coverage_capability_deltas
+  - unknown_group_deltas
+  - same_path_file_content_changes
+  - candidate_added
+  - candidate_removed
+  - candidate_changed
+  - unchanged_candidates_suppressed
+  - interpretation_constraints
+properties:
+  projection_model: {type: string, const: wsp-scanner-drift-v1}
+  reference_id: {type: string}
+  reference_sha256: {type: string}
+  baseline: {type: object}
+  current: {type: object}
+  digest_changed: {type: object}
+  candidate_deltas: {type: array}
+  relocation_hypotheses: {type: array}
+  review_required_changed_coordinates: {type: array}
+  coverage_capability_deltas: {type: array}
+  unknown_group_deltas: {type: array}
+  same_path_file_content_changes: {type: array}
+  candidate_added: {type: integer, minimum: 0}
+  candidate_removed: {type: integer, minimum: 0}
+  candidate_changed: {type: integer, minimum: 0}
+  unchanged_candidates_suppressed: {type: integer, minimum: 0}
+  interpretation_constraints: {type: array}
