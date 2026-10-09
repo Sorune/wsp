@@ -253,6 +253,37 @@ if "$WSP" lens tree "$MANIFEST" --axis logical >/dev/null 2>&1; then fail 'inval
 run_json_failure INVALID_CONFIGURATION 'invalid manifest JSON error' lens tree "$MANIFEST" --axis logical
 run_json_failure INVALID_REQUEST 'invalid axis JSON error' lens tree "$INIT" --axis unsupported
 
+SCAN_REPO="$TMP/scanner-repo"
+mkdir -p "$SCAN_REPO/src"
+git init -q "$SCAN_REPO"
+git -C "$SCAN_REPO" config user.name 'WSP Test'
+git -C "$SCAN_REPO" config user.email 'wsp-test@example.invalid'
+printf '%s\n' '{"name":"scanner-fixture","version":"1.0.0"}' > "$SCAN_REPO/package.json"
+printf '%s\n' 'export const fixture = true;' > "$SCAN_REPO/src/index.js"
+git -C "$SCAN_REPO" add .
+git -C "$SCAN_REPO" commit -q -m scanner-fixture
+SCAN_STATUS_BEFORE="$(git -C "$SCAN_REPO" status --porcelain)"
+"$WSP" scanner scan "$SCAN_REPO" --subject-id repository:scanner-fixture --artifact both > "$TMP/scan-a.json"
+"$WSP" scanner scan "$SCAN_REPO" --subject-id repository:scanner-fixture --artifact both > "$TMP/scan-b.json"
+cmp "$TMP/scan-a.json" "$TMP/scan-b.json" && ok 'scanner scan deterministic' || fail 'scanner scan nondeterministic'
+scan_json="$(cat "$TMP/scan-a.json")"
+contains "$scan_json" '"id": "wsp-scanner"' 'scanner public producer'
+contains "$scan_json" '"version": "0.2.0"' 'scanner public version'
+contains "$scan_json" '"unknowns": []' 'scanner empty unknowns array'
+contains "$scan_json" '"diagnostics": []' 'scanner empty diagnostics array'
+"$WSP" scanner view --input "$TMP/scan-a.json" --level L0 > "$TMP/scan-l0.json"
+scan_l0="$(cat "$TMP/scan-l0.json")"
+contains "$scan_l0" '"level": "L0"' 'scanner bounded L0 view'
+contains "$scan_l0" '"raw_sha256":' 'scanner L0 raw provenance'
+"$WSP" scanner compare --baseline "$TMP/scan-a.json" --current "$TMP/scan-b.json" > "$TMP/scan-diff.json"
+scan_diff="$(cat "$TMP/scan-diff.json")"
+contains "$scan_diff" '"projection_model": "wsp-scanner-drift-v1"' 'scanner drift model'
+contains "$scan_diff" '"candidate_added": 0' 'same scan has no added candidate'
+contains "$scan_diff" '"candidate_removed": 0' 'same scan has no removed candidate'
+contains "$scan_diff" '"candidate_changed": 0' 'same scan has no changed candidate'
+SCAN_STATUS_AFTER="$(git -C "$SCAN_REPO" status --porcelain)"
+[[ "$SCAN_STATUS_BEFORE" == "$SCAN_STATUS_AFTER" ]] && ok 'scanner commands do not mutate repository' || fail 'scanner commands mutated repository'
+
 printf 'PASS=%s\nFAIL=%s\n' "$PASS" "$FAIL"
 if [[ "$FAIL" -gt 0 ]]; then printf 'STATUS: FAIL\n'; exit 1; fi
 printf 'STATUS: PASS\n'

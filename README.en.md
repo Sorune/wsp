@@ -27,10 +27,10 @@ Download the archive matching your operating system and architecture from the
 GitHub Release, place the `wsp` binary on your PATH, and start with `wsp doctor`.
 
 ```text
-wsp_0.1.1_linux_amd64.tar.gz
-wsp_0.1.1_linux_arm64.tar.gz
-wsp_0.1.1_darwin_amd64.tar.gz
-wsp_0.1.1_darwin_arm64.tar.gz
+wsp_0.2.0_linux_amd64.tar.gz
+wsp_0.2.0_linux_arm64.tar.gz
+wsp_0.2.0_darwin_amd64.tar.gz
+wsp_0.2.0_darwin_arm64.tar.gz
 SHA256SUMS
 ```
 
@@ -63,6 +63,9 @@ wsp init [path]
 wsp inspect [path] [--json]
 wsp repo inspect [path] [--json]
 wsp lens tree [path] --axis logical|session [--json]
+wsp scanner scan <repository> --subject-id ID [--artifact snapshot|candidates|both]
+wsp scanner view --input FILE [--level L0|L1|L2|L3] [...]
+wsp scanner compare --baseline FILE --current FILE [--reference FILE]
 wsp status [--json]
 wsp doctor
 wsp version
@@ -82,6 +85,11 @@ Each manifest relation declares an observation `axis` (`logical` or `session`).
 Lens traversal selects only relations declared for the requested axis; relation
 names, entity names, paths, and identifiers never imply an axis.
 
+Scanner is an **optional read-only capability** for Lens initial calibration,
+refresh, and structural-drift review. Ordinary WSP/Lens use does not require it;
+Scanner evidence is not architecture or authority, and scan/view/compare never
+auto-edit semantic source. See [`docs/SCANNER.md`](docs/SCANNER.md).
+
 ## Distribution
 
 A compiled WSP binary does not require a Go runtime. The current V0 runtime
@@ -97,7 +105,7 @@ The source checkout includes a thin POSIX shell launcher. Semantic behavior is
 implemented by a standard-library-first Go core. V0 targets macOS and Linux;
 native Windows and PowerShell are deferred.
 
-The current public version is `0.1.1`.
+The current public version is `0.2.0`.
 
 ## Development
 

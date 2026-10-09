@@ -1,6 +1,6 @@
-# WSP V0 Product Boundary
+# WSP Product Boundary
 
-Status: V0 implementation candidate; release not authorized.
+Status: public product contract. Core/Lens remain valid without Scanner; Scanner is an optional read-only capability.
 
 ## Ownership
 
@@ -38,6 +38,37 @@ Git Adapter → Adapter Facts → WSP Normalizer → Semantic Model
 The adapter owns backend facts, not meaning. The Inspector reconciles facts and
 declared relations. A Lens projects; presentation formats. None of these layers
 authorizes or mutates external systems.
+
+## Optional Scanner
+
+Scanner is an explicit, optional mechanical observer for Lens initial
+calibration, refresh review, and structural-drift review.
+
+```text
+Repository reality -> Scanner observation -> bounded review -> calibration proposal
+                                                        -> Human gate -> semantic source
+```
+
+Scanner raw observations, structural candidates, bounded views, and drift
+projections are evidence only. They do not become WSP relations, Project state,
+accepted architecture, or execution authority. Scanner never writes a WSP
+manifest or Lens source, and WSP provides no automatic calibration-apply
+operation.
+
+```text
+SCAN ENABLED != WSP REQUIRED MODE
+SCAN CANDIDATE != LOGICAL MODEL
+SCAN DRIFT != ARCHITECTURE VIOLATION
+PROPOSAL != AUTHORIZED UPDATE
+```
+
+The public Scanner producer/version is an observation compatibility boundary.
+Comparison fails closed for incompatible producer/configuration. Unsupported or
+partial observation remains explicit through coverage/unknown evidence.
+Scanner is implemented in the same standard-library Go binary and introduces no
+new runtime dependency, daemon, network access, or plugin registry.
+
+See `docs/SCANNER.md` for the public machine and workflow contract.
 
 ## Configuration
 

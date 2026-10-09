@@ -1,0 +1,54 @@
+schema_version: 1
+title: WSP Scanner combined artifact
+type: object
+required: [snapshot, candidates]
+properties:
+  snapshot:
+    type: object
+    required: [schema_version, producer, subject, config, nodes, edges, evidence, coverage, unknowns, diagnostics, digests]
+    properties:
+      schema_version: {type: integer, const: 1}
+      producer:
+        type: object
+        required: [id, version, model_version, derivation_model_version]
+      subject:
+        type: object
+        required: [id, revision, branch, working_tree]
+      config:
+        type: object
+        required: [source_roots, namespace_prefixes]
+      nodes: {type: array}
+      edges: {type: array}
+      evidence: {type: array}
+      coverage:
+        type: array
+        items:
+          type: object
+          required: [capability, state]
+      unknowns: {type: array}
+      diagnostics: {type: array}
+      digests:
+        type: object
+        required: [structure, evidence, coverage, producer, config, artifact]
+  candidates:
+    type: object
+    required: [subject, producer, source_snapshot_digest, config, candidates, unmapped_node_ids, coverage, unknowns, diagnostics, digest]
+    properties:
+      subject:
+        type: object
+        required: [id, revision, branch, working_tree]
+      producer:
+        type: object
+        required: [id, version, model_version, derivation_model_version]
+      source_snapshot_digest: {type: string, minLength: 1}
+      config: {type: object}
+      candidates:
+        type: array
+        items:
+          type: object
+          required: [id, coordinate, label, physical_node_ids, signals, confidence, review_required, review_reasons]
+      unmapped_node_ids: {type: array}
+      coverage: {type: array}
+      unknowns: {type: array}
+      diagnostics: {type: array}
+      digest: {type: string, minLength: 1}

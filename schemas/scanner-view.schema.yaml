@@ -1,0 +1,23 @@
+schema_version: 1
+title: WSP Scanner bounded view
+type: object
+required: [level, subject, provenance]
+properties:
+  level: {type: string, enum: [L0, L1, L2, L3]}
+  subject:
+    type: object
+    required: [id, revision]
+  versions: {type: object}
+  counts: {type: object}
+  coverage: {type: object}
+  provenance:
+    type: object
+    required: [raw_sha256]
+  task_candidates: {type: array}
+  task_candidate_counts: {type: object}
+  review_candidates: {type: array}
+  review_candidate_counts: {type: object}
+  unknown_summary: {type: object}
+  affected_unknown_summary: {type: object}
+  selection_counts: {type: object}
+  data: {type: object}
