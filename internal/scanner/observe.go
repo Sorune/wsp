@@ -269,7 +269,7 @@ func Observe(r Request) (ObservationBatch, error) {
 			b.Edges = append(b.Edges, Edge{ID: EdgeID("filesystem.contains", pid, fid), Kind: "filesystem.contains", From: pid, To: fid, Resolution: ""})
 		}
 	}
-	observeGit(&b, files, config)
+	observeGit(&b, files, excluded)
 	observeManifests(sub, &b, files)
 	sort.Slice(b.Nodes, func(i, j int) bool { return b.Nodes[i].ID < b.Nodes[j].ID })
 	sort.Slice(b.Edges, func(i, j int) bool { return b.Edges[i].ID < b.Edges[j].ID })
@@ -300,16 +300,7 @@ func containsExcludedName(values []string, value string) bool {
 	return false
 }
 
-func excludedCoordinate(coordinate string, excluded map[string]string) bool {
-	for boundary := range excluded {
-		if coordinate == boundary || strings.HasPrefix(coordinate, boundary+"/") {
-			return true
-		}
-	}
-	return false
-}
-
-func observeGit(b *ObservationBatch, files map[string]observedFile, config Config) {
+func observeGit(b *ObservationBatch, files map[string]observedFile, excluded map[string]string) {
 	root := b.Subject.Root
 	if _, err := gitOutput(root, "rev-parse", "--show-toplevel"); err != nil {
 		return
@@ -341,10 +332,12 @@ func observeGit(b *ObservationBatch, files map[string]observedFile, config Confi
 			continue
 		}
 		code, path := v[:2], strings.TrimSuffix(filepath.ToSlash(v[3:]), "/")
-		if isExcludedCoordinate(path, config.ExcludeDirNames) {
-			if strings.ContainsAny(code, "RC") && i+1 < len(parts) && parts[i+1] != "" {
-				i++
-			}
+		var old string
+		if strings.ContainsAny(code, "RC") && i+1 < len(parts) && parts[i+1] != "" {
+			old = strings.TrimSuffix(filepath.ToSlash(parts[i+1]), "/")
+			i++
+		}
+		if excludedCoordinate(path, excluded) {
 			continue
 		}
 		statuses[path] = code
@@ -352,12 +345,10 @@ func observeGit(b *ObservationBatch, files map[string]observedFile, config Confi
 		if code != "!!" {
 			b.Nodes = append(b.Nodes, Node{ID: NodeID(b.Subject.ID, "git.change", path), Kind: "git.change", Coordinate: path, Name: filepath.Base(path), Attributes: map[string]string{"status": code}, EvidenceRefs: []string{ref}})
 		}
-		if strings.ContainsAny(code, "RC") && i+1 < len(parts) && parts[i+1] != "" {
-			old := strings.TrimSuffix(filepath.ToSlash(parts[i+1]), "/")
+		if old != "" && !excludedCoordinate(old, excluded) {
 			statuses[old] = code
 			ref = evidence(b, "git_status", old, 0, 0, "rename_source:"+code)
 			b.Nodes = append(b.Nodes, Node{ID: NodeID(b.Subject.ID, "git.change", old), Kind: "git.change", Coordinate: old, Name: filepath.Base(old), Attributes: map[string]string{"status": code, "rename_source": "true"}, EvidenceRefs: []string{ref}})
-			i++
 		}
 	}
 	tracked, err := gitOutput(root, "ls-files", "-z")
@@ -371,7 +362,7 @@ func observeGit(b *ObservationBatch, files map[string]observedFile, config Confi
 			continue
 		}
 		p = filepath.ToSlash(p)
-		if isExcludedCoordinate(p, config.ExcludeDirNames) {
+		if excludedCoordinate(p, excluded) {
 			continue
 		}
 		ref := evidence(b, "git_tracked_path", p, 0, 0, "tracked")
@@ -396,9 +387,10 @@ func observeGit(b *ObservationBatch, files map[string]observedFile, config Confi
 	}
 }
 
-func isExcludedCoordinate(coordinate string, excludedNames []string) bool {
-	for _, segment := range strings.Split(filepath.ToSlash(coordinate), "/") {
-		if containsExcludedName(excludedNames, segment) {
+func excludedCoordinate(coordinate string, excluded map[string]string) bool {
+	coordinate = strings.TrimSuffix(filepath.ToSlash(coordinate), "/")
+	for boundary := range excluded {
+		if coordinate == boundary || strings.HasPrefix(coordinate, boundary+"/") {
 			return true
 		}
 	}

@@ -330,6 +330,64 @@ func TestObserveGitMetadataRespectsDeclaredExclusionScope(t *testing.T) {
 	}
 }
 
+func TestObserveGitMetadataOnlyExcludesActualDirectoryBoundaries(t *testing.T) {
+	r := fixture(t)
+	initGitFixture(t, r)
+	file := filepath.Join(r, "node_modules")
+	if err := os.WriteFile(file, []byte("regular file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, r, "add", "node_modules")
+	gitRun(t, r, "commit", "-qm", "file named node_modules")
+	b, err := Observe(Request{Path: r, SubjectID: "basename-file", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracked := false
+	for _, n := range b.Nodes {
+		if n.Kind == "file" && n.Coordinate == "node_modules" && n.Attributes["git_tracked"] == "true" {
+			tracked = true
+		}
+	}
+	if !tracked {
+		t.Fatal("regular file named node_modules lost tracked metadata")
+	}
+}
+
+func TestObserveGitRenameAcrossExcludedBoundaryFiltersEachPath(t *testing.T) {
+	r := fixture(t)
+	initGitFixture(t, r)
+	for p, data := range map[string]string{"node_modules/pkg/original.txt": "rename me\n"} {
+		full := filepath.Join(r, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitRun(t, r, "add", ".")
+	gitRun(t, r, "commit", "-qm", "rename fixture")
+	gitRun(t, r, "mv", "node_modules/pkg/original.txt", "visible.txt")
+	b, err := Observe(Request{Path: r, SubjectID: "cross-boundary-rename", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range b.Nodes {
+		if n.Kind == "git.change" && strings.HasPrefix(n.Coordinate, "node_modules/") {
+			t.Fatalf("excluded rename source leaked: %#v", n)
+		}
+	}
+	if _, ok := findNode(b, "git.change", "visible.txt"); !ok {
+		t.Fatal("visible rename destination was not retained")
+	}
+	for _, u := range b.Unknowns {
+		if u.Kind == "git_tracked_path" && strings.HasPrefix(u.Coordinate, "node_modules/") {
+			t.Fatalf("excluded rename source became UNKNOWN: %#v", u)
+		}
+	}
+}
+
 func TestObserveReadFailureOutsideExcludedScopeRemainsFailClosed(t *testing.T) {
 	r := fixture(t)
 	if err := os.WriteFile(filepath.Join(r, "unreadable.txt"), []byte("content"), 0600); err != nil {
