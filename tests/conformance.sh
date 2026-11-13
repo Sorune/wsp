@@ -268,7 +268,7 @@ SCAN_STATUS_BEFORE="$(git -C "$SCAN_REPO" status --porcelain)"
 cmp "$TMP/scan-a.json" "$TMP/scan-b.json" && ok 'scanner scan deterministic' || fail 'scanner scan nondeterministic'
 scan_json="$(cat "$TMP/scan-a.json")"
 contains "$scan_json" '"id": "wsp-scanner"' 'scanner public producer'
-contains "$scan_json" '"version": "0.3.0"' 'scanner public version'
+contains "$scan_json" '"version": "0.4.0"' 'scanner public version'
 contains "$scan_json" '"unknowns": []' 'scanner empty unknowns array'
 contains "$scan_json" '"diagnostics": []' 'scanner empty diagnostics array'
 "$WSP" scanner view --input "$TMP/scan-a.json" --level L0 > "$TMP/scan-l0.json"

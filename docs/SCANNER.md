@@ -57,7 +57,7 @@ incomplete observation is reported through coverage, unknowns, and diagnostics
 rather than converted into absence.
 
 The public observation producer is `wsp-scanner`; the derived-candidate producer
-is `wsp-scanner-derivation`. Scanner `0.3.0` uses observation model `1` and
+is `wsp-scanner-derivation`. Scanner `0.4.0` uses observation model `1` and
 derivation model `1`. Cross-version or incompatible producer/configuration
 comparison is not guaranteed and fails closed.
 

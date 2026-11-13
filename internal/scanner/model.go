@@ -3,7 +3,7 @@
 package scanner
 
 const (
-	ScannerVersion          = "0.3.0"
+	ScannerVersion          = "0.4.0"
 	ObservationModelVersion = "1"
 	DerivationModelVersion  = "1"
 )
