@@ -55,7 +55,7 @@ func TestScannerCLIEndToEnd(t *testing.T) {
 	}
 	snapshot := artifact["snapshot"].(map[string]any)
 	producer := snapshot["producer"].(map[string]any)
-	if producer["id"] != "wsp-scanner" || producer["version"] != "0.3.0" {
+	if producer["id"] != "wsp-scanner" || producer["version"] != "0.4.0" {
 		t.Fatalf("unexpected Scanner producer: %v", producer)
 	}
 	for _, key := range []string{"nodes", "edges", "evidence", "coverage", "unknowns", "diagnostics"} {
@@ -94,6 +94,21 @@ func TestScannerCLIEndToEnd(t *testing.T) {
 	statusAfter := gitOutputForTest(t, repo, "status", "--porcelain")
 	if statusBefore != statusAfter {
 		t.Fatalf("Scanner mutated repository: before=%q after=%q", statusBefore, statusAfter)
+	}
+}
+
+func TestScannerExcludeDirNameCLIValidation(t *testing.T) {
+	for _, name := range []string{"", "/", "..", ".", "a/b", `a\\b`, "*", "bad\nname"} {
+		if _, err := parseScannerScanArgs([]string{"repo", "--subject-id", "fixture", "--exclude-dir-name", name}); err == nil {
+			t.Errorf("invalid excluded directory name %q accepted", name)
+		}
+	}
+	if _, err := parseScannerScanArgs([]string{"repo", "--subject-id", "fixture", "--exclude-dir-name", "vendor", "--exclude-dir-name", "vendor"}); err == nil {
+		t.Fatal("repeated excluded directory name accepted")
+	}
+	o, err := parseScannerScanArgs([]string{"repo", "--subject-id", "fixture", "--exclude-dir-name", "Vendor", "--exclude-dir-name", "node_modules"})
+	if err != nil || len(o.ExcludeDirNames) != 2 {
+		t.Fatalf("valid repeated option rejected: options=%+v err=%v", o, err)
 	}
 }
 

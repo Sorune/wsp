@@ -39,6 +39,9 @@ func validCoordinate(s string) bool {
 	}
 	return true
 }
+func ValidDirectoryName(s string) bool {
+	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, "/\\\x00\r\n") && strings.TrimSpace(s) == s && !strings.ContainsAny(s, "*?[]")
+}
 func cloneStrings(in []string) []string { return append([]string(nil), in...) }
 func sortUniqueStrings(s []string, what string) ([]string, error) {
 	sort.Strings(s)

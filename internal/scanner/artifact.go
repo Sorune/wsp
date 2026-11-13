@@ -18,7 +18,7 @@ func digest(v any) (string, error) {
 	return "sha256:" + hex.EncodeToString(h[:]), nil
 }
 func normalizeConfig(c Config) (Config, error) {
-	out := Config{SourceRoots: append([]string(nil), c.SourceRoots...), NamespacePrefixes: append([]string(nil), c.NamespacePrefixes...)}
+	out := Config{SourceRoots: append([]string(nil), c.SourceRoots...), NamespacePrefixes: append([]string(nil), c.NamespacePrefixes...), ExcludeDirNames: append([]string(nil), c.ExcludeDirNames...)}
 	if len(out.NamespacePrefixes) != 0 {
 		return out, fmt.Errorf("namespace prefixes are not supported by this observer")
 	}
@@ -35,12 +35,21 @@ func normalizeConfig(c Config) (Config, error) {
 			return out, fmt.Errorf("invalid namespace prefix %q", p)
 		}
 	}
+	for _, name := range out.ExcludeDirNames {
+		if !ValidDirectoryName(name) {
+			return out, fmt.Errorf("invalid excluded directory name %q", name)
+		}
+	}
 	sort.Strings(out.SourceRoots)
 	sort.Strings(out.NamespacePrefixes)
+	sort.Strings(out.ExcludeDirNames)
 	if _, e := sortUniqueStrings(out.SourceRoots, "source root"); e != nil {
 		return out, e
 	}
 	if _, e := sortUniqueStrings(out.NamespacePrefixes, "namespace prefix"); e != nil {
+		return out, e
+	}
+	if _, e := sortUniqueStrings(out.ExcludeDirNames, "excluded directory name"); e != nil {
 		return out, e
 	}
 	return out, nil
@@ -142,6 +151,7 @@ func nonNilSlice[T any](in []T) []T {
 func normalizeSnapshotCollections(s PhysicalSnapshot) PhysicalSnapshot {
 	s.Config.SourceRoots = nonNilSlice(s.Config.SourceRoots)
 	s.Config.NamespacePrefixes = nonNilSlice(s.Config.NamespacePrefixes)
+	s.Config.ExcludeDirNames = nonNilSlice(s.Config.ExcludeDirNames)
 	s.Nodes = nonNilSlice(s.Nodes)
 	s.Edges = nonNilSlice(s.Edges)
 	s.Evidence = nonNilSlice(s.Evidence)
@@ -154,6 +164,7 @@ func normalizeSnapshotCollections(s PhysicalSnapshot) PhysicalSnapshot {
 func normalizeCandidateCollections(s DerivedCandidateSet) DerivedCandidateSet {
 	s.Config.SourceRoots = nonNilSlice(s.Config.SourceRoots)
 	s.Config.NamespacePrefixes = nonNilSlice(s.Config.NamespacePrefixes)
+	s.Config.ExcludeDirNames = nonNilSlice(s.Config.ExcludeDirNames)
 	s.Candidates = nonNilSlice(s.Candidates)
 	s.UnmappedNodeIDs = nonNilSlice(s.UnmappedNodeIDs)
 	s.Coverage = nonNilSlice(s.Coverage)

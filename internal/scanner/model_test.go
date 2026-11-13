@@ -127,6 +127,29 @@ func TestSnapshotOrderingAndLocationDigests(t *testing.T) {
 	}
 }
 
+func TestConfigExclusionsNormalizeAndValidate(t *testing.T) {
+	b := testBatch()
+	a, err := BuildSnapshot(b, Config{ExcludeDirNames: []string{"vendor", "node_modules"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	z, err := BuildSnapshot(b, Config{ExcludeDirNames: []string{"node_modules", "vendor"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Digests.Config != z.Digests.Config || a.Digests.Artifact != z.Digests.Artifact {
+		t.Fatal("exclusion order was not normalized")
+	}
+	for _, invalid := range []string{"", "/", "..", ".", "a/b", `a\\b`, "*", "bad\x00name"} {
+		if _, err := BuildSnapshot(b, Config{ExcludeDirNames: []string{invalid}}); err == nil {
+			t.Errorf("invalid name %q accepted", invalid)
+		}
+	}
+	if _, err := BuildSnapshot(b, Config{ExcludeDirNames: []string{"vendor", "vendor"}}); err == nil {
+		t.Fatal("duplicate exclusion accepted")
+	}
+}
+
 func TestNormalizeRejectsInvalidCoordinatesAndReferences(t *testing.T) {
 	b := testBatch()
 	b.Nodes[0].Coordinate = "../escape"

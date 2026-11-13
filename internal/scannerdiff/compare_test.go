@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Sorune/wsp/internal/scanner"
 )
 
 func sample(t *testing.T) artifact {
@@ -113,6 +115,53 @@ func TestIncompatibleOrIncoherentArtifactsFail(t *testing.T) {
 				t.Fatal("incompatible artifact accepted")
 			}
 		})
+	}
+}
+
+func TestConfigDigestMismatchFailsClosed(t *testing.T) {
+	a := sample(t)
+	b := clone(t, a)
+	b.Snapshot.Config = json.RawMessage(`{"exclude_dir_names":["vendor"]}`)
+	b.Candidates.Config = b.Snapshot.Config
+	b.Snapshot.Digests["config"] = "different-config-digest"
+	if _, err := compare(a, b, nil, nil, nil, reference{}); err == nil || !strings.Contains(err.Error(), "producer/config changed") {
+		t.Fatalf("config and digest mismatch did not fail closed: %v", err)
+	}
+}
+
+func TestSameConfigDifferentDigestFailsClosed(t *testing.T) {
+	a := sample(t)
+	b := clone(t, a)
+	b.Snapshot.Digests["config"] = "different-config-digest"
+	if _, err := compare(a, b, nil, nil, nil, reference{}); err == nil || !strings.Contains(err.Error(), "producer/config changed") {
+		t.Fatalf("same config with different digest did not fail closed: %v", err)
+	}
+}
+
+func TestGeneratedNoOptionScannerArtifactComparesWithItself(t *testing.T) {
+	r := t.TempDir()
+	batch, err := scanner.Observe(scanner.Request{Path: r, SubjectID: "no-option-compare"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := scanner.BuildSnapshot(batch, scanner.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidates, err := scanner.Derive(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := scanner.SerializeBundle(snapshot, candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var generated artifact
+	if err := json.Unmarshal(encoded, &generated); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := compare(generated, generated, encoded, encoded, nil, reference{}); err != nil {
+		t.Fatalf("generated no-option artifact did not compare with itself: %v", err)
 	}
 }
 func TestCLIIsBoundedDeterministicAndReadOnly(t *testing.T) {

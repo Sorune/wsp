@@ -1,8 +1,10 @@
 package scanner
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -59,6 +61,173 @@ func TestObserveFilesystemOnlyAndDoesNotFollowSymlinks(t *testing.T) {
 		}
 	}
 }
+
+func TestObserveExplicitDirectoryExclusionsAreOpaqueAndDeterministic(t *testing.T) {
+	r := fixture(t)
+	if err := os.MkdirAll(filepath.Join(r, "node_modules", "nested"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r, "node_modules", "nested", "package.json"), []byte(`{"name":"hidden"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(r, "node_modules", "nested", "link")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	config := Config{ExcludeDirNames: []string{"node_modules"}}
+	b1, err := Observe(Request{Path: r, SubjectID: "exclusion-fixture", Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2, err := Observe(Request{Path: r, SubjectID: "exclusion-fixture", Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s1, err := BuildSnapshot(b1, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2, err := BuildSnapshot(b2, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j1, _ := SerializeSnapshot(s1)
+	j2, _ := SerializeSnapshot(s2)
+	if !bytes.Equal(j1, j2) || s1.Digests != s2.Digests {
+		t.Fatal("excluded observation is not deterministic")
+	}
+	if _, ok := findNode(b1, "directory", "node_modules"); !ok {
+		t.Fatal("opaque excluded boundary is not visible")
+	}
+	if _, ok := findNode(b1, "file", "node_modules/nested/package.json"); ok {
+		t.Fatal("excluded descendant was observed")
+	}
+	if hasUnknownAt(b1, "node_modules/nested/link") {
+		t.Fatal("symlink inside excluded boundary was inspected")
+	}
+	filesystem := coverageState(b1, "filesystem")
+	if filesystem != "COMPLETE" {
+		t.Fatalf("filesystem coverage within declared scope = %s", filesystem)
+	}
+	if s1.Config.ExcludeDirNames == nil || len(s1.Config.ExcludeDirNames) != 1 {
+		t.Fatalf("config exclusions not serialized: %#v", s1.Config)
+	}
+	candidates, err := Derive(s1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates.Candidates) != 0 {
+		t.Fatalf("excluded directory became a candidate: %#v", candidates.Candidates)
+	}
+	for _, edge := range s1.Edges {
+		for _, node := range s1.Nodes {
+			if node.Attributes["opaque"] == "configured_exclusion" && edge.From == node.ID {
+				t.Fatalf("excluded directory has a containment relation: %#v", edge)
+			}
+		}
+	}
+	raw, err := SerializeSnapshot(s1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var roundTrip PhysicalSnapshot
+	if err := json.Unmarshal(raw, &roundTrip); err != nil {
+		t.Fatal(err)
+	}
+	if roundTrip.Digests.Config != s1.Digests.Config || len(roundTrip.Config.ExcludeDirNames) != 1 {
+		t.Fatal("exclusion config did not survive artifact round trip")
+	}
+	noOptions, err := BuildSnapshot(b1, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if noOptions.Digests.Config == s1.Digests.Config {
+		t.Fatal("exclusions did not affect config digest")
+	}
+	caseRoot := fixture(t)
+	if err := os.Mkdir(filepath.Join(caseRoot, "Node_Modules"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(caseRoot, "Node_Modules", "visible.txt"), []byte("visible"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	caseBatch, err := Observe(Request{Path: caseRoot, SubjectID: "case-sensitive-exclusion", Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := findNode(caseBatch, "file", "Node_Modules/visible.txt"); !ok {
+		t.Fatal("mixed-case directory was excluded by case-sensitive match")
+	}
+}
+
+func TestObserveExcludedSourceRootRemainsPartial(t *testing.T) {
+	r := fixture(t)
+	_ = os.MkdirAll(filepath.Join(r, "node_modules", "pkg"), 0755)
+	cfg := Config{SourceRoots: []string{"node_modules/pkg"}, ExcludeDirNames: []string{"node_modules"}}
+	b, err := Observe(Request{Path: r, SubjectID: "excluded-source-root", Config: cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coverageState(b, "filesystem") != "PARTIAL" || !hasUnknownAt(b, "node_modules/pkg") {
+		t.Fatalf("excluded source root did not fail closed: coverage=%#v unknowns=%#v", b.Coverage, b.Unknowns)
+	}
+}
+
+func TestObserveUnrelatedAndBrokenSymlinksRemainUnknown(t *testing.T) {
+	r := fixture(t)
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("outside"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for name, target := range map[string]string{"link": outside, "broken": filepath.Join(r, "missing-target")} {
+		if err := os.Symlink(target, filepath.Join(r, name)); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+	}
+	b, err := Observe(Request{Path: r, SubjectID: "symlink-controls", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"link", "broken"} {
+		found := false
+		for _, u := range b.Unknowns {
+			if u.Kind == "symlink" && u.Coordinate == name && u.Reason == "symlink_not_followed" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("unrelated symlink %q was not kept UNKNOWN: %#v", name, b.Unknowns)
+		}
+	}
+}
+
+func findNode(b ObservationBatch, kind, coordinate string) (Node, bool) {
+	for _, n := range b.Nodes {
+		if n.Kind == kind && n.Coordinate == coordinate {
+			return n, true
+		}
+	}
+	return Node{}, false
+}
+func hasUnknownAt(b ObservationBatch, coordinate string) bool {
+	for _, u := range b.Unknowns {
+		if u.Coordinate == coordinate {
+			return true
+		}
+	}
+	return false
+}
+func coverageState(b ObservationBatch, capability string) string {
+	for _, c := range b.Coverage {
+		if c.Capability == capability {
+			return c.State
+		}
+	}
+	return ""
+}
 func TestObserveGitDirtyAndChangeFacts(t *testing.T) {
 	r := fixture(t)
 	for _, args := range [][]string{{"init", "-q", r}, {"-C", r, "config", "user.email", "scanner@example.invalid"}, {"-C", r, "config", "user.name", "Scanner"}} {
@@ -96,6 +265,178 @@ func TestObserveGitDirtyAndChangeFacts(t *testing.T) {
 	}
 	if changes < 2 {
 		t.Fatalf("expected tracked and untracked facts, got %d", changes)
+	}
+}
+
+func TestObserveGitMetadataRespectsDeclaredExclusionScope(t *testing.T) {
+	r := fixture(t)
+	initGitFixture(t, r)
+	for p, data := range map[string]string{
+		"node_modules/pkg/a.go":         "package pkg\n",
+		"node_modules/pkg/package.json": `{"name":"excluded-pkg"}`,
+		"outside.txt":                   "outside\n",
+	} {
+		full := filepath.Join(r, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitRun(t, r, "add", ".")
+	gitRun(t, r, "commit", "-qm", "fixture")
+	config := Config{ExcludeDirNames: []string{"node_modules"}}
+	clean, err := Observe(Request{Path: r, SubjectID: "excluded-git", Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range clean.Unknowns {
+		if u.Coordinate == "node_modules/pkg/a.go" || u.Coordinate == "node_modules/pkg/package.json" {
+			t.Fatalf("excluded tracked path reported UNKNOWN: %#v", u)
+		}
+	}
+	for _, n := range clean.Nodes {
+		if (n.Kind == "git.change" || n.Kind == "git.ignored") && strings.HasPrefix(n.Coordinate, "node_modules/") {
+			t.Fatalf("excluded path emitted Git path node: %#v", n)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(r, "node_modules/pkg/a.go"), []byte("package pkg\n// changed\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r, "outside.txt"), []byte("outside changed\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := Observe(Request{Path: r, SubjectID: "excluded-git", Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outsideChange := false
+	for _, n := range changed.Nodes {
+		if n.Kind == "git.change" && strings.HasPrefix(n.Coordinate, "node_modules/") {
+			t.Fatalf("excluded modified path emitted git.change: %#v", n)
+		}
+		if n.Kind == "git.change" && n.Coordinate == "outside.txt" {
+			outsideChange = true
+		}
+	}
+	if !outsideChange {
+		t.Fatal("outside-scope Git change was not retained")
+	}
+	for _, u := range changed.Unknowns {
+		if u.Kind == "git_tracked_path" && strings.HasPrefix(u.Coordinate, "node_modules/") {
+			t.Fatalf("excluded tracked path emitted UNKNOWN: %#v", u)
+		}
+	}
+}
+
+func TestObserveGitMetadataOnlyExcludesActualDirectoryBoundaries(t *testing.T) {
+	r := fixture(t)
+	initGitFixture(t, r)
+	file := filepath.Join(r, "node_modules")
+	if err := os.WriteFile(file, []byte("regular file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, r, "add", "node_modules")
+	gitRun(t, r, "commit", "-qm", "file named node_modules")
+	b, err := Observe(Request{Path: r, SubjectID: "basename-file", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracked := false
+	for _, n := range b.Nodes {
+		if n.Kind == "file" && n.Coordinate == "node_modules" && n.Attributes["git_tracked"] == "true" {
+			tracked = true
+		}
+	}
+	if !tracked {
+		t.Fatal("regular file named node_modules lost tracked metadata")
+	}
+}
+
+func TestObserveGitRenameAcrossExcludedBoundaryFiltersEachPath(t *testing.T) {
+	r := fixture(t)
+	initGitFixture(t, r)
+	for p, data := range map[string]string{"node_modules/pkg/original.txt": "rename me\n"} {
+		full := filepath.Join(r, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitRun(t, r, "add", ".")
+	gitRun(t, r, "commit", "-qm", "rename fixture")
+	gitRun(t, r, "mv", "node_modules/pkg/original.txt", "visible.txt")
+	b, err := Observe(Request{Path: r, SubjectID: "cross-boundary-rename", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range b.Nodes {
+		if n.Kind == "git.change" && strings.HasPrefix(n.Coordinate, "node_modules/") {
+			t.Fatalf("excluded rename source leaked: %#v", n)
+		}
+	}
+	if _, ok := findNode(b, "git.change", "visible.txt"); !ok {
+		t.Fatal("visible rename destination was not retained")
+	}
+	for _, u := range b.Unknowns {
+		if u.Kind == "git_tracked_path" && strings.HasPrefix(u.Coordinate, "node_modules/") {
+			t.Fatalf("excluded rename source became UNKNOWN: %#v", u)
+		}
+	}
+}
+
+func TestObserveGitRenameIntoExcludedBoundaryRetainsVisibleSource(t *testing.T) {
+	r := fixture(t)
+	initGitFixture(t, r)
+	if err := os.MkdirAll(filepath.Join(r, "node_modules", "pkg"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r, "visible.txt"), []byte("rename me\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, r, "add", ".")
+	gitRun(t, r, "commit", "-qm", "rename fixture")
+	gitRun(t, r, "mv", "visible.txt", "node_modules/pkg/new.txt")
+	b, err := Observe(Request{Path: r, SubjectID: "rename-into-excluded", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := findNode(b, "git.change", "visible.txt"); !ok {
+		t.Fatal("visible rename source was dropped")
+	}
+	for _, n := range b.Nodes {
+		if n.Kind == "git.change" && strings.HasPrefix(n.Coordinate, "node_modules/") {
+			t.Fatalf("excluded rename destination leaked: %#v", n)
+		}
+	}
+	for _, u := range b.Unknowns {
+		if u.Kind == "git_tracked_path" && strings.HasPrefix(u.Coordinate, "node_modules/") {
+			t.Fatalf("excluded rename destination became UNKNOWN: %#v", u)
+		}
+	}
+}
+
+func TestObserveReadFailureOutsideExcludedScopeRemainsFailClosed(t *testing.T) {
+	r := fixture(t)
+	if err := os.WriteFile(filepath.Join(r, "unreadable.txt"), []byte("content"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root can read mode-zero files")
+	}
+	if err := os.Chmod(filepath.Join(r, "unreadable.txt"), 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(r, "unreadable.txt"), 0600) })
+	b, err := Observe(Request{Path: r, SubjectID: "read-failure-outside-exclusion", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coverageState(b, "filesystem") != "PARTIAL" || !hasUnknownAt(b, "unreadable.txt") {
+		t.Fatalf("outside-scope read failure did not remain fail-closed: coverage=%#v unknowns=%#v", b.Coverage, b.Unknowns)
 	}
 }
 func TestObserveManifestsAndNormalize(t *testing.T) {

@@ -39,6 +39,7 @@ state.
 ## Raw observation
 
 `scanner scan` requires an explicit subject ID and exactly one repository root.
+Repeated `--exclude-dir-name NAME` options declare exact, case-sensitive directory basenames to omit. There are no implicit physical exclusions. Matching directories are opaque boundaries and their contents (including symlinks) are not inspected. The snapshot records bounded boundary evidence and the normalized exclusion list in its configuration/digest. Filesystem `COMPLETE` describes only traversal within this declared scope; excluded boundaries remain visible. A configured source root within an excluded boundary remains UNKNOWN and filesystem coverage is PARTIAL. These exclusions do not use `.gitignore`.
 
 Artifacts:
 
@@ -56,7 +57,7 @@ incomplete observation is reported through coverage, unknowns, and diagnostics
 rather than converted into absence.
 
 The public observation producer is `wsp-scanner`; the derived-candidate producer
-is `wsp-scanner-derivation`. Scanner `0.3.0` uses observation model `1` and
+is `wsp-scanner-derivation`. Scanner `0.4.0` uses observation model `1` and
 derivation model `1`. Cross-version or incompatible producer/configuration
 comparison is not guaranteed and fails closed.
 

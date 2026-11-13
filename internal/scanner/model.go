@@ -3,7 +3,7 @@
 package scanner
 
 const (
-	ScannerVersion          = "0.3.0"
+	ScannerVersion          = "0.4.0"
 	ObservationModelVersion = "1"
 	DerivationModelVersion  = "1"
 )
@@ -18,6 +18,7 @@ type Request struct {
 type Config struct {
 	SourceRoots       []string `json:"source_roots"`
 	NamespacePrefixes []string `json:"namespace_prefixes"`
+	ExcludeDirNames   []string `json:"exclude_dir_names,omitempty"`
 }
 
 // Subject identifies the repository revision being observed. Root is runtime
