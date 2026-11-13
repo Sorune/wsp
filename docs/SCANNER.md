@@ -46,10 +46,14 @@ Artifacts:
 - `candidates`: derived structural candidate set only.
 - `both`: combined artifact used by bounded view and comparison.
 
-The current observer uses filesystem, Git, Go, and npm/package-manifest facts
-that it can mechanically establish. Unsupported or incomplete observation is
-reported through coverage, unknowns, and diagnostics rather than converted into
-absence.
+The current observer uses filesystem, Git, Go, npm/package-manifest, and a
+focused static subset of pnpm workspace facts that it can mechanically
+establish. pnpm `packages:` entries support literal paths and deterministic
+single-segment `*` globs matched against observed `package.json` directories.
+Other YAML structures, dynamic or unsupported glob syntax, malformed input,
+and patterns with no observed package remain UNKNOWN/PARTIAL. Unsupported or
+incomplete observation is reported through coverage, unknowns, and diagnostics
+rather than converted into absence.
 
 The public observation producer is `wsp-scanner`; the derived-candidate producer
 is `wsp-scanner-derivation`. Scanner `0.2.0` uses observation model `1` and

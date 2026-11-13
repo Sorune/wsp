@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"go/parser"
 	"go/token"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -11,12 +12,12 @@ import (
 )
 
 func observeManifests(s Subject, b *ObservationBatch, files map[string]observedFile) {
-	for _, cap := range []string{"go_manifests", "go_package_clauses", "go_workspaces", "npm_manifests", "npm_workspaces", "unsupported_manifest"} {
+	for _, cap := range []string{"go_manifests", "go_package_clauses", "go_workspaces", "npm_manifests", "npm_workspaces", "pnpm_workspaces", "unsupported_manifest"} {
 		setCoverage(b, cap, "NOT_APPLICABLE")
 	}
 	goMods := map[string]string{}
 	npmPkgs := map[string]string{}
-	goModSeen, npmSeen, goWorkSeen, goSourceSeen, npmWorkspaceSeen := false, false, false, false, false
+	goModSeen, npmSeen, goWorkSeen, goSourceSeen, npmWorkspaceSeen, pnpmWorkspaceSeen := false, false, false, false, false, false
 	for rel, f := range files {
 		switch filepath.Base(rel) {
 		case "go.mod":
@@ -62,9 +63,63 @@ func observeManifests(s Subject, b *ObservationBatch, files map[string]observedF
 			ref := evidence(b, "package_json", rel, 0, 0, "name:"+name)
 			id := addManifestNode(s, b, "npm.package", coord, label, map[string]string{"name": name, "directory": dir}, ref)
 			npmPkgs[rel] = id
-		case "pnpm-workspace.yaml", "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "Cargo.toml", "pyproject.toml":
+		case "pnpm-workspace.yaml":
+			pnpmWorkspaceSeen = true
+		case "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "Cargo.toml", "pyproject.toml":
 			ref := evidence(b, "unsupported_manifest", rel, 0, 0, filepath.Base(rel))
 			unknown(b, s.ID, "unsupported_manifest", rel, "manifest_format_not_supported", ref)
+		}
+	}
+	// pnpm membership is observed only for a deliberately small static YAML
+	// subset. Unknown YAML and glob features stay UNKNOWN instead of implying
+	// that unobserved packages are excluded.
+	for rel, f := range files {
+		if filepath.Base(rel) != "pnpm-workspace.yaml" {
+			continue
+		}
+		if f.data == nil {
+			unknown(b, s.ID, "pnpm_workspace", rel, "workspace_content_unavailable")
+			continue
+		}
+		patterns, parseErr := pnpmWorkspacePatterns(string(f.data))
+		if parseErr != "" {
+			ref := evidence(b, "pnpm_workspace_syntax", rel, 0, 0, parseErr)
+			unknown(b, s.ID, "pnpm_workspace", rel, parseErr, ref)
+			continue
+		}
+		workspaceDir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(rel)))
+		if workspaceDir == "" {
+			workspaceDir = "."
+		}
+		coord := rel + "#workspace"
+		workspaceRef := evidence(b, "pnpm_workspace", rel, 0, 0, "packages")
+		workspaceID := addManifestNode(s, b, "pnpm.workspace", coord, "pnpm-workspace.yaml", map[string]string{"directory": workspaceDir}, workspaceRef)
+		matched := map[string]bool{}
+		for _, pattern := range patterns {
+			count := 0
+			for packageFile := range npmPkgs {
+				pkgDir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(packageFile)))
+				relDir, err := filepath.Rel(filepath.FromSlash(workspaceDir), filepath.FromSlash(pkgDir))
+				if err != nil || relDir == ".." || strings.HasPrefix(relDir, "../") || filepath.IsAbs(relDir) {
+					continue
+				}
+				relDir = filepath.ToSlash(relDir)
+				ok, _ := path.Match(pattern, relDir)
+				if !ok {
+					continue
+				}
+				to := npmPkgs[packageFile]
+				matched[to] = true
+				count++
+			}
+			if count == 0 {
+				ref := evidence(b, "pnpm_workspace_pattern", rel, 0, 0, pattern)
+				unknown(b, s.ID, "pnpm_workspace", filepath.ToSlash(filepath.Join(workspaceDir, pattern)), "workspace_pattern_no_observed_package", ref)
+			}
+		}
+		for packageID := range matched {
+			ref := evidence(b, "pnpm_workspace_membership", rel, 0, 0, packageCoordinate(b, packageID))
+			appendEdge(b, Edge{ID: EdgeID("workspace.use", workspaceID, packageID), Kind: "workspace.use", From: workspaceID, To: packageID, Resolution: "RESOLVED", EvidenceRefs: []string{workspaceRef, ref}})
 		}
 	}
 	// Package clauses are parsed only from regular files collected in the walk.
@@ -205,6 +260,12 @@ func observeManifests(s Subject, b *ObservationBatch, files map[string]observedF
 	if npmWorkspaceSeen {
 		setCoverage(b, "npm_workspaces", "COMPLETE")
 	}
+	if pnpmWorkspaceSeen {
+		setCoverage(b, "pnpm_workspaces", "COMPLETE")
+	}
+	if hasUnknownKind(b, "pnpm_workspace") {
+		setCoverage(b, "pnpm_workspaces", "PARTIAL")
+	}
 	if hasUnknownKind(b, "npm_workspace") {
 		setCoverage(b, "npm_workspaces", "PARTIAL")
 	}
@@ -219,6 +280,81 @@ func hasUnknownKind(b *ObservationBatch, kind string) bool {
 		}
 	}
 	return false
+}
+
+func pnpmWorkspacePatterns(src string) ([]string, string) {
+	patterns := []string{}
+	section, found := false, false
+	for _, raw := range strings.Split(src, "\n") {
+		line := strings.TrimRight(raw, " \t\r")
+		trim := strings.TrimSpace(line)
+		if trim == "" || strings.HasPrefix(trim, "#") {
+			continue
+		}
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		if indent == 0 {
+			if trim == "packages:" {
+				if found {
+					return nil, "duplicate_packages_key"
+				}
+				found, section = true, true
+				continue
+			}
+			return nil, "unsupported_yaml_structure"
+		}
+		if !section || indent != 2 || !strings.HasPrefix(trim, "- ") {
+			return nil, "unsupported_yaml_structure"
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(trim, "- "))
+		if i := strings.Index(value, " #"); i >= 0 {
+			value = strings.TrimSpace(value[:i])
+		}
+		if value == "" {
+			return nil, "malformed_package_pattern"
+		}
+		if value[0] == '\'' {
+			if len(value) < 2 || value[len(value)-1] != '\'' || strings.Contains(value[1:len(value)-1], "'") {
+				return nil, "malformed_package_pattern"
+			}
+			value = value[1 : len(value)-1]
+		} else if value[0] == '"' {
+			decoded, err := strconv.Unquote(value)
+			if err != nil {
+				return nil, "malformed_package_pattern"
+			}
+			value = decoded
+		} else if strings.ContainsAny(value, " \t,{}[]&|>@`\"'") {
+			return nil, "unsupported_package_pattern_syntax"
+		}
+		if value == "" || strings.HasPrefix(value, "!") || strings.ContainsAny(value, "\\$?") || strings.Contains(value, "**") || strings.ContainsAny(value, "[]{}") || unsafeLiteralPath(value) {
+			return nil, "unsupported_package_pattern"
+		}
+		value = strings.TrimPrefix(value, "./")
+		if path.Clean(value) != value {
+			return nil, "malformed_package_pattern"
+		}
+		if _, err := path.Match(value, "probe/path"); err != nil {
+			return nil, "malformed_package_pattern"
+		}
+		patterns = append(patterns, value)
+	}
+	if !found {
+		return nil, "packages_key_missing"
+	}
+	if len(patterns) == 0 {
+		return nil, "packages_list_empty_or_unavailable"
+	}
+	sort.Strings(patterns)
+	return uniqueStrings(patterns), ""
+}
+
+func packageCoordinate(b *ObservationBatch, id string) string {
+	for _, n := range b.Nodes {
+		if n.ID == id {
+			return n.Coordinate
+		}
+	}
+	return id
 }
 func addManifestNode(s Subject, b *ObservationBatch, kind, coord, name string, attrs map[string]string, ref string) string {
 	id := NodeID(s.ID, kind, coord)
