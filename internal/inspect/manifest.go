@@ -2,6 +2,7 @@ package inspect
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"github.com/Sorune/wsp/internal/config"
@@ -15,6 +16,25 @@ func Manifest(root string) (model.Document, error) {
 		return model.Document{}, err
 	}
 	d := config.ToDocument(m)
+	// Repository paths are authored relative to the manifest-owning workspace,
+	// never to the process caller's current directory. Keep the source value for
+	// provenance while exposing the resolved path to Lens consumers.
+	for i := range d.Entities {
+		if d.Entities[i].Kind != "REPOSITORY" {
+			continue
+		}
+		configured := d.Entities[i].Attributes["path"]
+		resolved := configured
+		if !filepath.IsAbs(configured) {
+			resolved = filepath.Join(root, configured)
+		}
+		resolved, err = filepath.Abs(resolved)
+		if err != nil {
+			return model.Document{}, fmt.Errorf("TARGET_UNAVAILABLE: resolve repository path: %w", err)
+		}
+		d.Entities[i].Attributes["path_configured"] = configured
+		d.Entities[i].Attributes["path"] = filepath.Clean(resolved)
+	}
 	if err := ValidateDocument(d); err != nil {
 		return model.Document{}, err
 	}

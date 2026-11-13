@@ -158,7 +158,7 @@ func TestObserveUnsupportedManifestSyntaxRemainsUnknown(t *testing.T) {
 	for _, u := range b.Unknowns {
 		seen[u.Kind] = true
 	}
-	for _, k := range []string{"npm_manifest", "go_module", "go_workspace", "unsupported_manifest"} {
+	for _, k := range []string{"npm_manifest", "go_module", "go_workspace", "pnpm_workspace"} {
 		if !seen[k] {
 			t.Fatalf("missing unknown for %s: %#v", k, b.Unknowns)
 		}
@@ -166,6 +166,99 @@ func TestObserveUnsupportedManifestSyntaxRemainsUnknown(t *testing.T) {
 	if _, e := BuildSnapshot(b, Config{}); e != nil {
 		t.Fatalf("unsupported syntax must remain a valid partial observation: %v", e)
 	}
+}
+
+func TestObservePnpmWorkspaceLiteralPatterns(t *testing.T) {
+	r := fixture(t)
+	if err := os.WriteFile(filepath.Join(r, "package.json"), []byte(`{"name":"workspace-root"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{"apps/studio", "packages/stable/core", "packages/internal/tool", "packages/public/content", "tools/checker", "outside/ignored"} {
+		if err := os.MkdirAll(filepath.Join(r, dir), 0755); err != nil {
+			t.Fatal(err)
+		}
+		name := strings.ReplaceAll(dir, "/", "-")
+		if err := os.WriteFile(filepath.Join(r, dir, "package.json"), []byte(`{"name":"`+name+`"}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(r, "pnpm-workspace.yaml"), []byte("packages:\n  - '.'\n  - 'apps/*'\n  - 'packages/stable/*'\n  - 'packages/internal/*'\n  - 'packages/public/*'\n  - 'tools/*'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Observe(Request{Path: r, SubjectID: "pnpm-fixture"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := map[string]bool{}
+	for _, edge := range b.Edges {
+		if edge.Kind != "workspace.use" {
+			continue
+		}
+		for _, node := range b.Nodes {
+			if node.ID == edge.To {
+				members[node.Attributes["directory"]] = true
+			}
+		}
+	}
+	for _, dir := range []string{"apps/studio", "packages/stable/core", "packages/internal/tool", "packages/public/content", "tools/checker"} {
+		if !members[dir] {
+			t.Errorf("expected pnpm membership for %s", dir)
+		}
+	}
+	if !members["."] {
+		t.Fatal("literal root package membership was not observed")
+	}
+	if members["outside/ignored"] {
+		t.Fatal("non-matching package was included")
+	}
+	for _, coverage := range b.Coverage {
+		if coverage.Capability == "pnpm_workspaces" && coverage.State != "COMPLETE" {
+			t.Fatalf("pnpm coverage = %s", coverage.State)
+		}
+	}
+	first, _ := SerializeSnapshot(mustSnapshot(t, b))
+	b2, err := Observe(Request{Path: r, SubjectID: "pnpm-fixture"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _ := SerializeSnapshot(mustSnapshot(t, b2))
+	if string(first) != string(second) {
+		t.Fatal("pnpm observation was not deterministic")
+	}
+}
+
+func TestObservePnpmMalformedAndUnmatchedStayPartial(t *testing.T) {
+	for _, content := range []string{"packages:\n", "packages: ['apps/*']\n", "packages:\n  - '!apps/*'\n", "packages:\n  - 'apps/*'\n  - 'missing/*'\n"} {
+		r := fixture(t)
+		_ = os.MkdirAll(filepath.Join(r, "apps", "studio"), 0755)
+		_ = os.WriteFile(filepath.Join(r, "apps", "studio", "package.json"), []byte(`{"name":"studio"}`), 0600)
+		_ = os.WriteFile(filepath.Join(r, "pnpm-workspace.yaml"), []byte(content), 0600)
+		b, err := Observe(Request{Path: r, SubjectID: "pnpm-unknown"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		state := ""
+		for _, c := range b.Coverage {
+			if c.Capability == "pnpm_workspaces" {
+				state = c.State
+			}
+		}
+		if state != "PARTIAL" {
+			t.Fatalf("input %q coverage = %q, want PARTIAL", content, state)
+		}
+		if len(b.Unknowns) == 0 {
+			t.Fatalf("input %q emitted no unknown", content)
+		}
+	}
+}
+
+func mustSnapshot(t *testing.T, b ObservationBatch) PhysicalSnapshot {
+	t.Helper()
+	s, err := BuildSnapshot(b, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
 }
 
 func TestObserveDeterministicReadOnly(t *testing.T) {

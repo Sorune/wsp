@@ -14,7 +14,7 @@ import (
 	"github.com/Sorune/wsp/internal/present"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -49,7 +49,7 @@ func exitCode(err error) int {
 }
 
 func run(args []string) error {
-	if len(args) == 0 || args[0] == "help" || hasHelpArg(args) {
+	if len(args) == 0 || args[0] == "help" || (hasHelpArg(args) && args[0] != "manifest") {
 		usage()
 		return nil
 	}
@@ -92,6 +92,8 @@ func run(args []string) error {
 		return lensCommand(args[1:])
 	case "scanner":
 		return scannerCommand(args[1:])
+	case "manifest":
+		return manifestCommand(args[1:])
 	case "init":
 		return initCommand(args[1:])
 	default:
@@ -123,6 +125,10 @@ Commands:
                                   Bounded AI-facing Scanner projection
   scanner compare --baseline FILE --current FILE [--reference FILE]
                                   Bounded structural-drift projection
+  manifest draft [repository] [--json] [--max-output-bytes N]
+                                  Preview-only deterministic manifest DRAFT
+  manifest validate --input FILE [--json]
+                                  Read-only manifest syntax/contract validation
   init [target]                   Create .wsp/workspace.yaml (mutates target)
   doctor                          Check local runtime prerequisites
   version                         Print version
@@ -138,7 +144,9 @@ JSON envelope for repo inspect, inspect, status, and lens tree.
 Scanner commands are explicit, optional, read-only observation surfaces. They
 never update Lens, semantic declarations, references, or project state. Scanner
 JSON is a separate observation contract, not the WSP semantic envelope.
-init defaults to the calling directory. It creates .wsp/workspace.yaml and may
+manifest draft never writes to its target; draft output remains unaccepted and
+contains no Project or session semantics. Validate reads its input only. init
+defaults to the calling directory. It creates .wsp/workspace.yaml and may
 create the target directory when missing. Init has no JSON mode. All commands
 except init are read-only. Help never executes a command.
 
@@ -260,10 +268,10 @@ func initCommand(args []string) error {
 	// observation is optional bootstrap evidence, not Workspace authority.
 	m.Repositories = nil
 	m.Relations = nil
-	if observed, observeErr := inspect.Repository(root); observeErr == nil && filepath.Clean(observed.Target) == filepath.Clean(root) {
+	if observed, observeErr := inspect.Repository(root); observeErr == nil && samePhysicalPath(observed.Target, root) {
 		for _, entity := range observed.Entities {
 			if entity.Kind == "REPOSITORY" {
-				m.Repositories = append(m.Repositories, config.Item{ID: entity.ID, Name: entity.Name, Path: root})
+				m.Repositories = append(m.Repositories, config.Item{ID: entity.ID, Name: entity.Name, Path: "."})
 				m.Relations = append(m.Relations, model.Relation{ID: "contains:" + m.WorkspaceID + ":" + entity.ID, Type: "contains", From: m.WorkspaceID, To: entity.ID, Axis: "logical", Provenance: model.ProvenanceConfig, Reason: "explicitly initialized workspace relation"})
 				break
 			}
@@ -278,6 +286,16 @@ func initCommand(args []string) error {
 	}
 	fmt.Printf("STATUS: INITIALIZED\nMANIFEST: %s\nMUTATION: %s\n", config.Path(root), mutation)
 	return nil
+}
+
+func samePhysicalPath(a, b string) bool {
+	resolve := func(p string) string {
+		if resolved, err := filepath.EvalSymlinks(p); err == nil {
+			return filepath.Clean(resolved)
+		}
+		return filepath.Clean(p)
+	}
+	return resolve(a) == resolve(b)
 }
 
 func targetPath(target string) string {

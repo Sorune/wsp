@@ -25,7 +25,7 @@ runtime or daemon.
 
 ## Distribution
 
-The current public feature release line is `0.2.0`. V0 targets macOS and
+The current public feature release line is `0.3.0`. V0 targets macOS and
 Linux. Windows/PowerShell is deferred. Release packaging, tags, and public asset
 publication remain Human-gated mutations and use the validated distribution
 path documented in `docs/DISTRIBUTION.md`.
