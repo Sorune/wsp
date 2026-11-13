@@ -1,8 +1,11 @@
 # WSP quick usage
 
 WSP observes local Git facts and projects explicitly declared manifest relations.
-Paths may be absolute or relative to the calling directory. When a command's
-target is omitted, it uses the calling directory.
+Command targets may be absolute or relative to the calling directory. Repository
+paths declared in `.wsp/workspace.yaml` are resolved relative to the directory
+containing that manifest, so the same manifest works after checkout relocation.
+Absolute repository paths remain supported. When a command's target is omitted,
+it uses the calling directory.
 
 ## Commands
 
@@ -47,10 +50,10 @@ a calibration. See [`SCANNER.md`](SCANNER.md).
 
 ## Manifest example
 
-See [`examples/workspace.yaml`](../examples/workspace.yaml). Replace its absolute
-repository path placeholders with real absolute paths before using it. WSP
-reports each repository path as configured; it does not resolve paths relative
-to the manifest directory.
+See [`examples/workspace.yaml`](../examples/workspace.yaml). Repository paths
+may be relative to the manifest-owning workspace or absolute. WSP reports the
+resolved path as `attributes.path` and retains the configured value as
+`attributes.path_configured` in Lens output.
 
 IDs are globally unique within the manifest. Prefixes such as `workspace:`,
 `project:`, and `repository:` are readable conventions only; the parser does not
@@ -79,8 +82,9 @@ wsp lens tree /path/to/workspace --axis logical
    configuration there. This writes `.wsp/workspace.yaml`; it does not create
    Projects or infer nested repositories.
 2. Edit that manifest to declare the workspace, two Projects, two Repositories,
-   and one generic session-context entity. Use absolute repository path
-   placeholders replaced with paths that exist on your machine.
+   and one generic session-context entity. Use paths relative to the manifest
+   root for portable declarations, or absolute paths when the location is
+   intentionally machine-specific.
 3. Add each relation explicitly. For a `contains` relation, set `from` to the
    parent ID and `to` to the child ID. Give every relation a globally unique
    ID and an explicit `logical` or `session` axis. A `project` field on a

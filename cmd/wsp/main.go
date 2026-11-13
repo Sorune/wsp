@@ -260,10 +260,10 @@ func initCommand(args []string) error {
 	// observation is optional bootstrap evidence, not Workspace authority.
 	m.Repositories = nil
 	m.Relations = nil
-	if observed, observeErr := inspect.Repository(root); observeErr == nil && filepath.Clean(observed.Target) == filepath.Clean(root) {
+	if observed, observeErr := inspect.Repository(root); observeErr == nil && samePhysicalPath(observed.Target, root) {
 		for _, entity := range observed.Entities {
 			if entity.Kind == "REPOSITORY" {
-				m.Repositories = append(m.Repositories, config.Item{ID: entity.ID, Name: entity.Name, Path: root})
+				m.Repositories = append(m.Repositories, config.Item{ID: entity.ID, Name: entity.Name, Path: "."})
 				m.Relations = append(m.Relations, model.Relation{ID: "contains:" + m.WorkspaceID + ":" + entity.ID, Type: "contains", From: m.WorkspaceID, To: entity.ID, Axis: "logical", Provenance: model.ProvenanceConfig, Reason: "explicitly initialized workspace relation"})
 				break
 			}
@@ -278,6 +278,16 @@ func initCommand(args []string) error {
 	}
 	fmt.Printf("STATUS: INITIALIZED\nMANIFEST: %s\nMUTATION: %s\n", config.Path(root), mutation)
 	return nil
+}
+
+func samePhysicalPath(a, b string) bool {
+	resolve := func(p string) string {
+		if resolved, err := filepath.EvalSymlinks(p); err == nil {
+			return filepath.Clean(resolved)
+		}
+		return filepath.Clean(p)
+	}
+	return resolve(a) == resolve(b)
 }
 
 func targetPath(target string) string {
