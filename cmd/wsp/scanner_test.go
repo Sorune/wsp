@@ -97,6 +97,21 @@ func TestScannerCLIEndToEnd(t *testing.T) {
 	}
 }
 
+func TestScannerExcludeDirNameCLIValidation(t *testing.T) {
+	for _, name := range []string{"", "/", "..", ".", "a/b", `a\\b`, "*", "bad\nname"} {
+		if _, err := parseScannerScanArgs([]string{"repo", "--subject-id", "fixture", "--exclude-dir-name", name}); err == nil {
+			t.Errorf("invalid excluded directory name %q accepted", name)
+		}
+	}
+	if _, err := parseScannerScanArgs([]string{"repo", "--subject-id", "fixture", "--exclude-dir-name", "vendor", "--exclude-dir-name", "vendor"}); err == nil {
+		t.Fatal("repeated excluded directory name accepted")
+	}
+	o, err := parseScannerScanArgs([]string{"repo", "--subject-id", "fixture", "--exclude-dir-name", "Vendor", "--exclude-dir-name", "node_modules"})
+	if err != nil || len(o.ExcludeDirNames) != 2 {
+		t.Fatalf("valid repeated option rejected: options=%+v err=%v", o, err)
+	}
+}
+
 func TestScannerCLICallerRelativeTarget(t *testing.T) {
 	root := t.TempDir()
 	binary := filepath.Join(root, "wsp")

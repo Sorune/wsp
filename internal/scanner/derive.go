@@ -515,6 +515,9 @@ func eligibleDerivationNode(n Node, evidence map[string]Evidence, ignored map[st
 	if n.Kind == "git.ignored" {
 		return false, n
 	}
+	if n.Attributes["opaque"] == "configured_exclusion" {
+		return false, n
+	}
 	if isIgnoredPath(derivationNodePath(n), ignored) || isIgnoredPath(n.Attributes["directory"], ignored) {
 		return false, n
 	}

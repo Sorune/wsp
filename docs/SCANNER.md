@@ -39,6 +39,7 @@ state.
 ## Raw observation
 
 `scanner scan` requires an explicit subject ID and exactly one repository root.
+Repeated `--exclude-dir-name NAME` options declare exact, case-sensitive directory basenames to omit. There are no implicit physical exclusions. Matching directories are opaque boundaries and their contents (including symlinks) are not inspected. The snapshot records bounded boundary evidence and the normalized exclusion list in its configuration/digest. Filesystem `COMPLETE` describes only traversal within this declared scope; excluded boundaries remain visible. A configured source root within an excluded boundary remains UNKNOWN and filesystem coverage is PARTIAL. These exclusions do not use `.gitignore`.
 
 Artifacts:
 

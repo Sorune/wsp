@@ -114,6 +114,7 @@ func Observe(r Request) (ObservationBatch, error) {
 	setCoverage(&b, "git", "UNAVAILABLE")
 	files := map[string]observedFile{}
 	dirs := map[string]string{}
+	excluded := map[string]string{}
 	walked := true
 	walkErr := filepath.WalkDir(sub.Root, func(abs string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -132,6 +133,10 @@ func Observe(r Request) (ObservationBatch, error) {
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
+		if rel != "." && d.IsDir() && containsExcludedName(config.ExcludeDirNames, d.Name()) {
+			excluded[rel] = d.Name()
+			return filepath.SkipDir
+		}
 		if rel != "." && d.Name() == ".git" {
 			if d.IsDir() {
 				return filepath.SkipDir
@@ -216,8 +221,26 @@ func Observe(r Request) (ObservationBatch, error) {
 	if walked {
 		setCoverage(&b, "filesystem", "COMPLETE")
 	}
+	if len(excluded) > 0 {
+		paths := make([]string, 0, len(excluded))
+		for p := range excluded {
+			paths = append(paths, p)
+		}
+		sort.Strings(paths)
+		for i, p := range paths {
+			if i == 64 {
+				b.Diagnostics = append(b.Diagnostics, Diagnostic{Code: "EXCLUDED_BOUNDARIES_TRUNCATED", Severity: "INFO", Message: fmt.Sprintf("%d additional excluded directory boundaries omitted", len(paths)-i)})
+				break
+			}
+			name := excluded[p]
+			ref := evidence(&b, "scope_exclusion", p, 0, 0, "directory_name:"+name+";reason:configured_exclusion")
+			id := NodeID(sub.ID, "directory", p)
+			b.Nodes = append(b.Nodes, Node{ID: id, Kind: "directory", Coordinate: p, Name: name, Attributes: map[string]string{"opaque": "configured_exclusion"}, EvidenceRefs: []string{ref}})
+			b.Diagnostics = append(b.Diagnostics, Diagnostic{Code: "SCOPE_EXCLUDED", Severity: "INFO", Coordinate: p, Message: "directory boundary excluded by configured basename " + name})
+		}
+	}
 	for _, root := range config.SourceRoots {
-		if _, ok := dirs[root]; !ok {
+		if _, ok := dirs[root]; !ok || excludedCoordinate(root, excluded) {
 			unknown(&b, sub.ID, "configured_source_root", root, "source_root_not_observed_directory")
 			setCoverage(&b, "filesystem", "PARTIAL")
 		}
@@ -266,6 +289,24 @@ func Observe(r Request) (ObservationBatch, error) {
 	}
 	sort.Slice(b.Coverage, func(i, j int) bool { return b.Coverage[i].Capability < b.Coverage[j].Capability })
 	return b, nil
+}
+
+func containsExcludedName(values []string, value string) bool {
+	for _, v := range values {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+func excludedCoordinate(coordinate string, excluded map[string]string) bool {
+	for boundary := range excluded {
+		if coordinate == boundary || strings.HasPrefix(coordinate, boundary+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func observeGit(b *ObservationBatch, files map[string]observedFile) {

@@ -1,8 +1,10 @@
 package scanner
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -58,6 +60,173 @@ func TestObserveFilesystemOnlyAndDoesNotFollowSymlinks(t *testing.T) {
 			t.Fatalf("symlink target observed: %#v", n)
 		}
 	}
+}
+
+func TestObserveExplicitDirectoryExclusionsAreOpaqueAndDeterministic(t *testing.T) {
+	r := fixture(t)
+	if err := os.MkdirAll(filepath.Join(r, "node_modules", "nested"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r, "node_modules", "nested", "package.json"), []byte(`{"name":"hidden"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(r, "node_modules", "nested", "link")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	config := Config{ExcludeDirNames: []string{"node_modules"}}
+	b1, err := Observe(Request{Path: r, SubjectID: "exclusion-fixture", Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2, err := Observe(Request{Path: r, SubjectID: "exclusion-fixture", Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s1, err := BuildSnapshot(b1, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2, err := BuildSnapshot(b2, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j1, _ := SerializeSnapshot(s1)
+	j2, _ := SerializeSnapshot(s2)
+	if !bytes.Equal(j1, j2) || s1.Digests != s2.Digests {
+		t.Fatal("excluded observation is not deterministic")
+	}
+	if _, ok := findNode(b1, "directory", "node_modules"); !ok {
+		t.Fatal("opaque excluded boundary is not visible")
+	}
+	if _, ok := findNode(b1, "file", "node_modules/nested/package.json"); ok {
+		t.Fatal("excluded descendant was observed")
+	}
+	if hasUnknownAt(b1, "node_modules/nested/link") {
+		t.Fatal("symlink inside excluded boundary was inspected")
+	}
+	filesystem := coverageState(b1, "filesystem")
+	if filesystem != "COMPLETE" {
+		t.Fatalf("filesystem coverage within declared scope = %s", filesystem)
+	}
+	if s1.Config.ExcludeDirNames == nil || len(s1.Config.ExcludeDirNames) != 1 {
+		t.Fatalf("config exclusions not serialized: %#v", s1.Config)
+	}
+	candidates, err := Derive(s1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates.Candidates) != 0 {
+		t.Fatalf("excluded directory became a candidate: %#v", candidates.Candidates)
+	}
+	for _, edge := range s1.Edges {
+		for _, node := range s1.Nodes {
+			if node.Attributes["opaque"] == "configured_exclusion" && edge.From == node.ID {
+				t.Fatalf("excluded directory has a containment relation: %#v", edge)
+			}
+		}
+	}
+	raw, err := SerializeSnapshot(s1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var roundTrip PhysicalSnapshot
+	if err := json.Unmarshal(raw, &roundTrip); err != nil {
+		t.Fatal(err)
+	}
+	if roundTrip.Digests.Config != s1.Digests.Config || len(roundTrip.Config.ExcludeDirNames) != 1 {
+		t.Fatal("exclusion config did not survive artifact round trip")
+	}
+	noOptions, err := BuildSnapshot(b1, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if noOptions.Digests.Config == s1.Digests.Config {
+		t.Fatal("exclusions did not affect config digest")
+	}
+	caseRoot := fixture(t)
+	if err := os.Mkdir(filepath.Join(caseRoot, "Node_Modules"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(caseRoot, "Node_Modules", "visible.txt"), []byte("visible"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	caseBatch, err := Observe(Request{Path: caseRoot, SubjectID: "case-sensitive-exclusion", Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := findNode(caseBatch, "file", "Node_Modules/visible.txt"); !ok {
+		t.Fatal("mixed-case directory was excluded by case-sensitive match")
+	}
+}
+
+func TestObserveExcludedSourceRootRemainsPartial(t *testing.T) {
+	r := fixture(t)
+	_ = os.MkdirAll(filepath.Join(r, "node_modules", "pkg"), 0755)
+	cfg := Config{SourceRoots: []string{"node_modules/pkg"}, ExcludeDirNames: []string{"node_modules"}}
+	b, err := Observe(Request{Path: r, SubjectID: "excluded-source-root", Config: cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coverageState(b, "filesystem") != "PARTIAL" || !hasUnknownAt(b, "node_modules/pkg") {
+		t.Fatalf("excluded source root did not fail closed: coverage=%#v unknowns=%#v", b.Coverage, b.Unknowns)
+	}
+}
+
+func TestObserveUnrelatedAndBrokenSymlinksRemainUnknown(t *testing.T) {
+	r := fixture(t)
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("outside"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for name, target := range map[string]string{"link": outside, "broken": filepath.Join(r, "missing-target")} {
+		if err := os.Symlink(target, filepath.Join(r, name)); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+	}
+	b, err := Observe(Request{Path: r, SubjectID: "symlink-controls", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"link", "broken"} {
+		found := false
+		for _, u := range b.Unknowns {
+			if u.Kind == "symlink" && u.Coordinate == name && u.Reason == "symlink_not_followed" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("unrelated symlink %q was not kept UNKNOWN: %#v", name, b.Unknowns)
+		}
+	}
+}
+
+func findNode(b ObservationBatch, kind, coordinate string) (Node, bool) {
+	for _, n := range b.Nodes {
+		if n.Kind == kind && n.Coordinate == coordinate {
+			return n, true
+		}
+	}
+	return Node{}, false
+}
+func hasUnknownAt(b ObservationBatch, coordinate string) bool {
+	for _, u := range b.Unknowns {
+		if u.Coordinate == coordinate {
+			return true
+		}
+	}
+	return false
+}
+func coverageState(b ObservationBatch, capability string) string {
+	for _, c := range b.Coverage {
+		if c.Capability == capability {
+			return c.State
+		}
+	}
+	return ""
 }
 func TestObserveGitDirtyAndChangeFacts(t *testing.T) {
 	r := fixture(t)
