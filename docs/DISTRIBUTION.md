@@ -1,6 +1,6 @@
 # WSP distribution boundary
 
-Status: `v0.2.0` public feature release line, using the validated Human-gated distribution path.
+Status: `v0.3.0` public feature release line, using the validated Human-gated distribution path.
 
 ## Runtime model
 
