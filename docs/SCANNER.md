@@ -47,14 +47,44 @@ Artifacts:
 - `candidates`: derived structural candidate set only.
 - `both`: combined artifact used by bounded view and comparison.
 
-The current observer uses filesystem, Git, Go, npm/package-manifest, and a
-focused static subset of pnpm workspace facts that it can mechanically
-establish. pnpm `packages:` entries support literal paths and deterministic
-single-segment `*` globs matched against observed `package.json` directories.
-Other YAML structures, dynamic or unsupported glob syntax, malformed input,
-and patterns with no observed package remain UNKNOWN/PARTIAL. Unsupported or
-incomplete observation is reported through coverage, unknowns, and diagnostics
-rather than converted into absence.
+The current observer uses filesystem, Git, Go, npm/package-manifest, and focused
+static subsets of pnpm, Gradle, Maven, Cargo, and PEP 621 project metadata. The
+new ecosystem parsers run only over manifest text; they do not invoke build
+tools or resolve dependency graphs. Each new ecosystem reports `PARTIAL` when
+its manifests are observed, because these parsers intentionally cover only
+bounded literal syntax.
+
+Gradle recognizes literal root project names and includes, plugin IDs and
+versions in `plugins` blocks, literal project group/version and Java language
+version, plus direct literal dependency notations and project references in
+`dependencies` blocks. Groovy single-quoted strings and Kotlin double-quoted
+strings are supported. Interpolation, aliases, variables, computed DSL,
+dynamic includes, and unrecognized statements remain UNKNOWN.
+
+Maven recognizes namespace-safe XML project coordinates as declared in that
+POM, parent declarations, literal modules, and literal dependency coordinates
+and scopes. It does not inherit parent properties or substitute `${...}`
+values. Malformed XML and unresolved coordinates remain UNKNOWN; external
+entities are not fetched.
+
+Cargo recognizes `[package]` name/version, literal `[workspace].members`
+arrays, and direct dependency versions written as strings or a simple
+`{ version = "..." }` table. Python recognizes literal PEP 621 project
+name/version/`requires-python`, string-array dependencies, and static
+`[build-system].requires`. Only a small TOML subset is parsed; unsupported
+values, dynamic PEP 621 fields, workspace inheritance, target-specific or
+computed dependency declarations, malformed input, and unresolved values
+remain UNKNOWN. None of these observations create Project semantics or promote
+Lens relationships.
+
+pnpm `packages:` entries support literal paths and deterministic single-segment
+`*` globs matched against observed `package.json` directories. Other YAML
+structures, dynamic or unsupported glob syntax, malformed input, and patterns
+with no observed package remain UNKNOWN/PARTIAL. Unsupported or incomplete
+observation is reported through coverage, unknowns, and diagnostics rather
+than converted into absence. New ecosystem coverage keys are omitted when no
+matching manifest exists, preserving prior output for repositories without
+those formats.
 
 The public observation producer is `wsp-scanner`; the derived-candidate producer
 is `wsp-scanner-derivation`. Scanner `0.4.0` uses observation model `1` and
