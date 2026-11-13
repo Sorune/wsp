@@ -18,6 +18,8 @@ it uses the calling directory.
 | `wsp scanner scan <repository> --subject-id ID [--artifact ...]` | One repository root; explicit target | None | Scanner JSON | No |
 | `wsp scanner view --input FILE [--level ...]` | Combined Scanner artifact | None | Scanner JSON | No |
 | `wsp scanner compare --baseline FILE --current FILE [--reference FILE]` | Two compatible Scanner artifacts | Reference optional | Scanner JSON | No |
+| `wsp manifest draft [repository] [--json] [--max-output-bytes N]` | One repository root; caller directory | None | Bounded draft/review JSON | No |
+| `wsp manifest validate --input FILE [--json]` | One manifest file | None | Validation summary | No |
 | `wsp init [target]` | Directory; caller directory | None; creates manifest | Not offered | Yes, creates `.wsp/workspace.yaml`; creates target directory if missing |
 
 `repo inspect` is the direct command for Git facts about one repository. The
@@ -27,8 +29,9 @@ a WSP manifest. Lens reads the manifest's declared relations for the selected
 axis; it does not infer a logical tree from directory layout. `--json` emits a
 stable JSON envelope for `repo inspect`, `inspect`, `status`, and `lens tree`.
 
-`--help` anywhere in a command displays help before command execution. `wsp
-help` displays the same help. `init` has no JSON mode.
+`--help` anywhere in a command displays help before command execution. Manifest
+commands show their draft/validation-specific help. `wsp help` displays the
+general help. `init` has no JSON mode.
 
 ## Optional Scanner workflow
 
@@ -47,6 +50,35 @@ wsp scanner view --input after.json --level L2 --prefix packages/public
 The raw artifact remains provenance. Prefer bounded `view` or `compare` output
 for AI context. Scanner never initializes a workspace, updates Lens, or accepts
 a calibration. See [`SCANNER.md`](SCANNER.md).
+
+## Mechanical manifest draft
+
+`manifest draft` prints a deterministic, preview-only root manifest and does
+not create `.wsp`, overwrite a manifest, or change Project state. The YAML is
+limited to machine-grounded workspace/repository identity and a repository
+path of `.`. It declares no Projects, relations, or session entities because
+the current manifest schema makes each relation immediately Lens-visible.
+
+`manifest draft --json` adds a bounded review companion containing concrete
+Scanner node identities and relative paths, structural candidate paths,
+proposed filesystem containment and package/workspace membership edges, plus
+coverage and coordinate-level UNKNOWN reasons. Companion records are explicitly
+`PROPOSED`; they do not become manifest relations. The default stdout budget is
+16,384 bytes. Whole records are deterministically omitted as needed, with
+total/returned/omitted counters and `proposal_status: PARTIAL`; raise the limit
+for Human review with `--max-output-bytes N` (maximum 1 MiB). No raw Scanner
+artifact is emitted.
+
+```sh
+wsp manifest draft /path/to/repo > /tmp/workspace.yaml
+wsp manifest draft /path/to/repo --json > /tmp/workspace-review.json
+wsp manifest validate --input /tmp/workspace.yaml --json
+```
+
+Validation parses the supplied file with the existing config loader and checks
+the current manifest contract. It does not install the file. A Human must review
+the proposal and use the existing authorized manifest workflow to accept any
+Project-owned semantics.
 
 ## Manifest example
 

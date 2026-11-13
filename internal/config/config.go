@@ -52,6 +52,18 @@ func Write(root string, m Manifest) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
+	b, err := Render(m)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0644)
+}
+
+// Render serializes a validated manifest without writing it to disk.
+func Render(m Manifest) ([]byte, error) {
+	if err := Validate(m); err != nil {
+		return nil, err
+	}
 	var b strings.Builder
 	b.WriteString("schema_version: 1\n")
 	b.WriteString("workspace_id: " + strconv.Quote(m.WorkspaceID) + "\n")
@@ -92,11 +104,17 @@ func Write(root string, m Manifest) error {
 			b.WriteString("    reason: " + strconv.Quote(r.Reason) + "\n")
 		}
 	}
-	return os.WriteFile(path, []byte(b.String()), 0644)
+	return []byte(b.String()), nil
 }
 
 func Load(root string) (Manifest, error) {
-	f, err := os.Open(Path(root))
+	return LoadFile(Path(root))
+}
+
+// LoadFile parses and validates one manifest without requiring it to be
+// installed at the conventional workspace path.
+func LoadFile(path string) (Manifest, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("TARGET_UNAVAILABLE: manifest unavailable: %w", err)
 	}
