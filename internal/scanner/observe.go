@@ -269,7 +269,7 @@ func Observe(r Request) (ObservationBatch, error) {
 			b.Edges = append(b.Edges, Edge{ID: EdgeID("filesystem.contains", pid, fid), Kind: "filesystem.contains", From: pid, To: fid, Resolution: ""})
 		}
 	}
-	observeGit(&b, files)
+	observeGit(&b, files, config)
 	observeManifests(sub, &b, files)
 	sort.Slice(b.Nodes, func(i, j int) bool { return b.Nodes[i].ID < b.Nodes[j].ID })
 	sort.Slice(b.Edges, func(i, j int) bool { return b.Edges[i].ID < b.Edges[j].ID })
@@ -309,7 +309,7 @@ func excludedCoordinate(coordinate string, excluded map[string]string) bool {
 	return false
 }
 
-func observeGit(b *ObservationBatch, files map[string]observedFile) {
+func observeGit(b *ObservationBatch, files map[string]observedFile, config Config) {
 	root := b.Subject.Root
 	if _, err := gitOutput(root, "rev-parse", "--show-toplevel"); err != nil {
 		return
@@ -341,6 +341,12 @@ func observeGit(b *ObservationBatch, files map[string]observedFile) {
 			continue
 		}
 		code, path := v[:2], strings.TrimSuffix(filepath.ToSlash(v[3:]), "/")
+		if isExcludedCoordinate(path, config.ExcludeDirNames) {
+			if strings.ContainsAny(code, "RC") && i+1 < len(parts) && parts[i+1] != "" {
+				i++
+			}
+			continue
+		}
 		statuses[path] = code
 		ref := evidence(b, "git_status", path, 0, 0, code)
 		if code != "!!" {
@@ -365,6 +371,9 @@ func observeGit(b *ObservationBatch, files map[string]observedFile) {
 			continue
 		}
 		p = filepath.ToSlash(p)
+		if isExcludedCoordinate(p, config.ExcludeDirNames) {
+			continue
+		}
 		ref := evidence(b, "git_tracked_path", p, 0, 0, "tracked")
 		if _, ok := files[p]; ok {
 			for i := range b.Nodes {
@@ -385,4 +394,13 @@ func observeGit(b *ObservationBatch, files map[string]observedFile) {
 			b.Nodes = append(b.Nodes, Node{ID: NodeID(b.Subject.ID, "git.ignored", p), Kind: "git.ignored", Coordinate: p, Name: filepath.Base(p), Attributes: map[string]string{"ignored": "true"}, EvidenceRefs: []string{ref}})
 		}
 	}
+}
+
+func isExcludedCoordinate(coordinate string, excludedNames []string) bool {
+	for _, segment := range strings.Split(filepath.ToSlash(coordinate), "/") {
+		if containsExcludedName(excludedNames, segment) {
+			return true
+		}
+	}
+	return false
 }
