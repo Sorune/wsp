@@ -18,6 +18,7 @@ type Request struct {
 type Config struct {
 	SourceRoots       []string `json:"source_roots"`
 	NamespacePrefixes []string `json:"namespace_prefixes"`
+	ExcludeDirNames   []string `json:"exclude_dir_names,omitempty"`
 }
 
 // Subject identifies the repository revision being observed. Root is runtime

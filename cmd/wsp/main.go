@@ -119,7 +119,7 @@ Commands:
   status [--json]                 Git facts for the calling repository
   lens tree [target] --axis logical|session [--json]
                                   Project declared manifest relations
-  scanner scan <repository> --subject-id ID [--artifact snapshot|candidates|both]
+  scanner scan <repository> --subject-id ID [--artifact snapshot|candidates|both] [--exclude-dir-name NAME ...]
                                   Optional mechanical repository observation
   scanner view --input FILE [--level L0|L1|L2|L3] [...]
                                   Bounded AI-facing Scanner projection

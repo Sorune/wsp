@@ -11,10 +11,11 @@ import (
 )
 
 type scannerScanOptions struct {
-	Path        string
-	SubjectID   string
-	Artifact    string
-	SourceRoots []string
+	Path            string
+	SubjectID       string
+	Artifact        string
+	SourceRoots     []string
+	ExcludeDirNames []string
 }
 
 func scannerCommand(args []string) error {
@@ -54,6 +55,16 @@ func parseScannerScanArgs(args []string) (scannerScanOptions, error) {
 				o.SubjectID = v
 			case "--source-root":
 				o.SourceRoots = append(o.SourceRoots, v)
+			case "--exclude-dir-name":
+				if !scanner.ValidDirectoryName(v) {
+					return o, fmt.Errorf("invalid --exclude-dir-name %q", v)
+				}
+				for _, existing := range o.ExcludeDirNames {
+					if existing == v {
+						return o, fmt.Errorf("scanner scan repeats --exclude-dir-name %q", v)
+					}
+				}
+				o.ExcludeDirNames = append(o.ExcludeDirNames, v)
 			case "--artifact":
 				if seenArtifact {
 					return o, fmt.Errorf("scanner scan repeats --artifact")
@@ -85,7 +96,7 @@ func scannerScanCommand(args []string) error {
 	if err != nil {
 		return fail("USAGE", err.Error(), 2)
 	}
-	config := scanner.Config{SourceRoots: o.SourceRoots}
+	config := scanner.Config{SourceRoots: o.SourceRoots, ExcludeDirNames: o.ExcludeDirNames}
 	batch, err := scanner.Observe(scanner.Request{Path: o.Path, SubjectID: o.SubjectID, Config: config})
 	if err != nil {
 		return fail("INVALID_REQUEST", "scanner observation failed: "+err.Error(), 2)
