@@ -388,6 +388,37 @@ func TestObserveGitRenameAcrossExcludedBoundaryFiltersEachPath(t *testing.T) {
 	}
 }
 
+func TestObserveGitRenameIntoExcludedBoundaryRetainsVisibleSource(t *testing.T) {
+	r := fixture(t)
+	initGitFixture(t, r)
+	if err := os.MkdirAll(filepath.Join(r, "node_modules", "pkg"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r, "visible.txt"), []byte("rename me\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, r, "add", ".")
+	gitRun(t, r, "commit", "-qm", "rename fixture")
+	gitRun(t, r, "mv", "visible.txt", "node_modules/pkg/new.txt")
+	b, err := Observe(Request{Path: r, SubjectID: "rename-into-excluded", Config: Config{ExcludeDirNames: []string{"node_modules"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := findNode(b, "git.change", "visible.txt"); !ok {
+		t.Fatal("visible rename source was dropped")
+	}
+	for _, n := range b.Nodes {
+		if n.Kind == "git.change" && strings.HasPrefix(n.Coordinate, "node_modules/") {
+			t.Fatalf("excluded rename destination leaked: %#v", n)
+		}
+	}
+	for _, u := range b.Unknowns {
+		if u.Kind == "git_tracked_path" && strings.HasPrefix(u.Coordinate, "node_modules/") {
+			t.Fatalf("excluded rename destination became UNKNOWN: %#v", u)
+		}
+	}
+}
+
 func TestObserveReadFailureOutsideExcludedScopeRemainsFailClosed(t *testing.T) {
 	r := fixture(t)
 	if err := os.WriteFile(filepath.Join(r, "unreadable.txt"), []byte("content"), 0600); err != nil {

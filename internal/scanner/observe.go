@@ -337,13 +337,12 @@ func observeGit(b *ObservationBatch, files map[string]observedFile, excluded map
 			old = strings.TrimSuffix(filepath.ToSlash(parts[i+1]), "/")
 			i++
 		}
-		if excludedCoordinate(path, excluded) {
-			continue
-		}
-		statuses[path] = code
-		ref := evidence(b, "git_status", path, 0, 0, code)
-		if code != "!!" {
-			b.Nodes = append(b.Nodes, Node{ID: NodeID(b.Subject.ID, "git.change", path), Kind: "git.change", Coordinate: path, Name: filepath.Base(path), Attributes: map[string]string{"status": code}, EvidenceRefs: []string{ref}})
+		if !excludedCoordinate(path, excluded) {
+			statuses[path] = code
+			ref := evidence(b, "git_status", path, 0, 0, code)
+			if code != "!!" {
+				b.Nodes = append(b.Nodes, Node{ID: NodeID(b.Subject.ID, "git.change", path), Kind: "git.change", Coordinate: path, Name: filepath.Base(path), Attributes: map[string]string{"status": code}, EvidenceRefs: []string{ref}})
+			}
 		}
 		if old != "" && !excludedCoordinate(old, excluded) {
 			statuses[old] = code
