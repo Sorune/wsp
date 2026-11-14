@@ -611,8 +611,8 @@ func TestObserveDeterministicReadOnly(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(r, "README.md"), []byte("fixture\n"), 0600)
 	gitRun(t, r, "add", ".")
 	gitRun(t, r, "commit", "-qm", "fixture")
+	statusBefore := string(gitRun(t, r, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all"))
 	before := treeFingerprint(t, r)
-	statusBefore := string(gitRun(t, r, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
 	first, e := Observe(Request{Path: r, SubjectID: "e2e-fixture"})
 	if e != nil {
 		t.Fatal(e)
@@ -651,7 +651,7 @@ func TestObserveDeterministicReadOnly(t *testing.T) {
 	if after := treeFingerprint(t, r); after != before {
 		t.Fatal("Observe changed a target file, including Git metadata")
 	}
-	statusAfter := string(gitRun(t, r, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
+	statusAfter := string(gitRun(t, r, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all"))
 	if statusAfter != statusBefore {
 		t.Fatal("Observe changed Git status")
 	}
@@ -691,6 +691,9 @@ func initGitFixture(t *testing.T, r string) {
 	gitRun(t, r, "init", "-q")
 	gitRun(t, r, "config", "user.email", "scanner@example.invalid")
 	gitRun(t, r, "config", "user.name", "Scanner")
+	// Keep fixture-owned background maintenance from racing the read-only audit.
+	gitRun(t, r, "config", "maintenance.auto", "false")
+	gitRun(t, r, "config", "gc.auto", "0")
 }
 func gitRun(t *testing.T, r string, args ...string) []byte {
 	t.Helper()

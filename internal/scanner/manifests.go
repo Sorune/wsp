@@ -18,6 +18,7 @@ func observeManifests(s Subject, b *ObservationBatch, files map[string]observedF
 	goMods := map[string]string{}
 	npmPkgs := map[string]string{}
 	goModSeen, npmSeen, goWorkSeen, goSourceSeen, npmWorkspaceSeen, pnpmWorkspaceSeen := false, false, false, false, false, false
+	gradleSeen, mavenSeen, cargoSeen, pythonSeen := false, false, false, false
 	for rel, f := range files {
 		switch filepath.Base(rel) {
 		case "go.mod":
@@ -65,9 +66,34 @@ func observeManifests(s Subject, b *ObservationBatch, files map[string]observedF
 			npmPkgs[rel] = id
 		case "pnpm-workspace.yaml":
 			pnpmWorkspaceSeen = true
-		case "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "Cargo.toml", "pyproject.toml":
-			ref := evidence(b, "unsupported_manifest", rel, 0, 0, filepath.Base(rel))
-			unknown(b, s.ID, "unsupported_manifest", rel, "manifest_format_not_supported", ref)
+		case "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts":
+			gradleSeen = true
+			if f.data == nil {
+				unknown(b, s.ID, "gradle_manifest", rel, "manifest_content_unavailable")
+				continue
+			}
+			observeGradle(s, b, rel, string(f.data))
+		case "pom.xml":
+			mavenSeen = true
+			if f.data == nil {
+				unknown(b, s.ID, "maven_manifest", rel, "manifest_content_unavailable")
+				continue
+			}
+			observeMaven(s, b, rel, f.data)
+		case "Cargo.toml":
+			cargoSeen = true
+			if f.data == nil {
+				unknown(b, s.ID, "cargo_manifest", rel, "manifest_content_unavailable")
+				continue
+			}
+			observeCargo(s, b, rel, string(f.data))
+		case "pyproject.toml":
+			pythonSeen = true
+			if f.data == nil {
+				unknown(b, s.ID, "python_manifest", rel, "manifest_content_unavailable")
+				continue
+			}
+			observePyproject(s, b, rel, string(f.data))
 		}
 	}
 	// pnpm membership is observed only for a deliberately small static YAML
@@ -271,6 +297,17 @@ func observeManifests(s Subject, b *ObservationBatch, files map[string]observedF
 	}
 	if hasUnknownKind(b, "unsupported_manifest") {
 		setCoverage(b, "unsupported_manifest", "UNSUPPORTED")
+	}
+	for _, x := range []struct {
+		seen      bool
+		cap, kind string
+	}{{gradleSeen, "gradle_manifests", "gradle_manifest"}, {mavenSeen, "maven_manifests", "maven_manifest"}, {cargoSeen, "cargo_manifests", "cargo_manifest"}, {pythonSeen, "python_manifests", "python_manifest"}} {
+		if x.seen {
+			setCoverage(b, x.cap, "PARTIAL")
+		}
+		if hasUnknownKind(b, x.kind) {
+			setCoverage(b, x.cap, "PARTIAL")
+		}
 	}
 }
 func hasUnknownKind(b *ObservationBatch, kind string) bool {

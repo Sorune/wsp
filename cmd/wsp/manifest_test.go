@@ -149,7 +149,7 @@ func TestManifestDraftPreservesDirtyRepositoryAndUsesBoundedEvidence(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains([]byte(out), []byte(`"status": "DRAFT"`)) || !bytes.Contains([]byte(out), []byte(`"unsupported_manifest": 1`)) || !bytes.Contains([]byte(out), []byte(`"npm.package": 2`)) {
+	if !bytes.Contains([]byte(out), []byte(`"status": "DRAFT"`)) || !bytes.Contains([]byte(out), []byte(`"maven_manifest": 1`)) || !bytes.Contains([]byte(out), []byte(`"npm.package": 2`)) || !bytes.Contains([]byte(out), []byte(`"artifact_id_missing"`)) {
 		t.Fatalf("missing truthful bounded Scanner summary: %s", out)
 	}
 	if strings.Contains(out, "local-only.txt") || strings.Contains(out, "<project/>") {
