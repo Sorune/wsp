@@ -174,6 +174,16 @@ func Derive(s PhysicalSnapshot) (DerivedCandidateSet, error) {
 			}
 			x := get(coord, leaf(coord))
 			addSignal(x, "go_package", n.Attributes["package"], n.ID)
+		case "gradle.project", "maven.project", "cargo.package", "python.project":
+			// These are declarations from bounded parsers, not resolved build graphs.
+			// Attach only to the concrete directory of the declaring manifest.
+			coord := n.Attributes["directory"]
+			if coord == "" {
+				continue
+			}
+			x := get(coord, leaf(coord))
+			addSignal(x, "manifest_boundary", n.Kind+":"+n.Name, n.ID)
+			x.reasons["static_manifest_partial"] = true
 		case "go.module", "npm.workspace", "npm.package":
 			coord := n.Attributes["directory"]
 			if coord == "" {
@@ -330,7 +340,7 @@ func Derive(s PhysicalSnapshot) (DerivedCandidateSet, error) {
 			conf = ConfidenceConflicted
 		}
 		if conf != ConfidenceConflicted {
-			if relevantCoverageGap(s, c, x, ignoredPaths) {
+			if x.reasons["static_manifest_partial"] || relevantCoverageGap(s, c, x, ignoredPaths) {
 				conf = ConfidenceUnresolved
 				reasons = append(reasons, "relevant_coverage_gap")
 			} else if classes >= 2 {
@@ -506,6 +516,12 @@ func derivationNodePath(n Node) string {
 		return strings.TrimSuffix(n.Coordinate, "#workspace")
 	case "npm.package":
 		return strings.TrimSuffix(n.Coordinate, "#package")
+	case "gradle.project", "maven.project":
+		return strings.TrimSuffix(n.Coordinate, "#project")
+	case "cargo.package":
+		return strings.TrimSuffix(n.Coordinate, "#package")
+	case "python.project":
+		return strings.TrimSuffix(n.Coordinate, "#project")
 	default:
 		return n.Coordinate
 	}
@@ -536,12 +552,28 @@ func eligibleDerivationNode(n Node, evidence map[string]Evidence, ignored map[st
 			}
 			n.EvidenceRefs = refs
 		}
-	case "go.module", "go.workspace", "npm.package", "npm.workspace":
+	case "go.module", "go.workspace", "npm.package", "npm.workspace", "gradle.project", "maven.project", "cargo.package", "python.project":
 		source := derivationNodePath(n)
 		if isIgnoredPath(source, ignored) || isIgnoredPath(n.Attributes["directory"], ignored) {
 			return false, n
 		}
 		refs := eligibleEvidenceRefs(n.EvidenceRefs, evidence, ignored)
+		switch n.Kind {
+		case "gradle.project", "maven.project", "cargo.package", "python.project":
+			if n.Attributes["directory"] == "" || path.Dir(source) != n.Attributes["directory"] || len(refs) == 0 {
+				return false, n
+			}
+			// Require provenance from the exact declaring file.
+			match := false
+			for _, ref := range refs {
+				if evidence[ref].Path == source {
+					match = true
+				}
+			}
+			if !match {
+				return false, n
+			}
+		}
 		if len(n.EvidenceRefs) > 0 {
 			if len(refs) == 0 {
 				return false, n

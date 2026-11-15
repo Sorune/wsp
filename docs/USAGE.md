@@ -18,7 +18,7 @@ it uses the calling directory.
 | `wsp scanner scan <repository> --subject-id ID [--artifact ...]` | One repository root; explicit target | None | Scanner JSON | No |
 | `wsp scanner view --input FILE [--level ...]` | Combined Scanner artifact | None | Scanner JSON | No |
 | `wsp scanner compare --baseline FILE --current FILE [--reference FILE]` | Two compatible Scanner artifacts | Reference optional | Scanner JSON | No |
-| `wsp manifest draft [repository] [--json] [--max-output-bytes N]` | One repository root; caller directory | None | Bounded draft/review JSON | No |
+| `wsp manifest draft [repository] [--json] [--max-output-bytes N] [--exclude-dir-name NAME ...]` | One repository root; caller directory | None | Bounded draft/review JSON | No |
 | `wsp manifest validate --input FILE [--json]` | One manifest file | None | Validation summary | No |
 | `wsp init [target]` | Directory; caller directory | None; creates manifest | Not offered | Yes, creates `.wsp/workspace.yaml`; creates target directory if missing |
 
@@ -69,9 +69,25 @@ total/returned/omitted counters and `proposal_status: PARTIAL`; raise the limit
 for Human review with `--max-output-bytes N` (maximum 1 MiB). No raw Scanner
 artifact is emitted.
 
+New bounded static Gradle, Maven, Cargo and PEP 621 declarations appear as
+proposed entities with relative declaration paths and evidence references.
+Literal Gradle includes, Maven modules and Cargo workspace members describe
+declared references only; no membership target or dependency graph is inferred.
+Git-ignored declaration sources are explicitly marked as physical observations
+and do not create structural candidates. Structural candidates with static
+manifest boundary evidence remain UNRESOLVED and require review. Output
+trimming also omits proposal relations whose endpoints are not returned. Structural\ncandidate parent IDs remain intact; parent_omitted marks a parent not returned\nin the bounded review.
+
+The optional repeated --exclude-dir-name NAME flag uses the Scanner's existing
+exact basename exclusion contract, with no implicit exclusions. The JSON
+review reports the normalized exclusions, observed opaque boundaries and any
+boundary-list truncation. The YAML preview records the explicit scope in a
+comment. A scoped proposal remains PARTIAL even when filesystem coverage is
+COMPLETE within its declared scope.
+
 ```sh
 wsp manifest draft /path/to/repo > /tmp/workspace.yaml
-wsp manifest draft /path/to/repo --json > /tmp/workspace-review.json
+wsp manifest draft /path/to/repo --json --exclude-dir-name node_modules --exclude-dir-name build > /tmp/workspace-review.json
 wsp manifest validate --input /tmp/workspace.yaml --json
 ```
 

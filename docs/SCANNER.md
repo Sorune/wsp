@@ -84,6 +84,15 @@ conditional Cargo scopes and Python direct-reference URLs are not flattened
 into ordinary dependencies. None of these observations create Project semantics or promote
 Lens relationships.
 
+Gradle project, Maven project, Cargo package and PEP 621 project declarations
+with surviving evidence from the exact declaring file can support a
+manifest_boundary structural candidate at the observed directory. These
+bounded-parser observations always retain the static_manifest_partial review
+reason and cannot promote confidence to STRONG or SUPPORTED. Module/member
+references and dependency declarations do not create inferred target
+directories or semantic edges. Ignored and excluded sources remain outside
+candidate derivation.
+
 pnpm `packages:` entries support literal paths and deterministic single-segment
 `*` globs matched against observed `package.json` directories. Other YAML
 structures, dynamic or unsupported glob syntax, malformed input, and patterns
@@ -94,9 +103,12 @@ matching manifest exists, preserving prior output for repositories without
 those formats.
 
 The public observation producer is `wsp-scanner`; the derived-candidate producer
-is `wsp-scanner-derivation`. Scanner `0.5.0` uses observation model `1` and
+is `wsp-scanner-derivation`. Scanner `0.6.0` uses observation model `1` and
 derivation model `1`. Cross-version or incompatible producer/configuration
 comparison is not guaranteed and fails closed.
+The v0.6.0 release adds static-manifest candidate signals; rebuild both
+comparison snapshots with the same released version and scan configuration.
+A candidate difference computed across producer versions is not source drift.
 
 Raw artifacts retain full evidence. They are not intended to be inserted
 wholesale into an AI context.

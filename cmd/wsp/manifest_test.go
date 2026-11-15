@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -201,5 +203,170 @@ func TestManifestValidateRejectsInvalidInputWithoutMutation(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".wsp")); !os.IsNotExist(err) {
 		t.Fatalf("validation mutated target: %v", err)
+	}
+}
+
+func TestManifestDraftNewStaticProposalsAndExplicitScope(t *testing.T) {
+	root := manifestFixture(t, map[string]string{
+		"settings.gradle":             "rootProject.name = 'demo'\ninclude ':unobserved'\n",
+		"java/pom.xml":                "<project><artifactId>demo</artifactId><modules><module>missing</module></modules></project>",
+		"rust/Cargo.toml":             "[package]\nname = \"demo\"\nversion = \"1\"\n[workspace]\nmembers = [\"missing\"]\n",
+		"py/pyproject.toml":           "[project]\nname = \"demo\"\n",
+		"node_modules/hidden/pom.xml": "<project><artifactId>hidden-sentinel</artifactId></project>",
+		"build/pyproject.toml":        "[project]\nname = \"hidden-sentinel\"\n",
+	})
+	args := []string{"--json", "--exclude-dir-name", "node_modules", "--exclude-dir-name", "build"}
+	out, err := draft(t, root, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r manifestDraftReport
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatal(err)
+	}
+	if r.Status != "DRAFT" || r.Mutation != "NONE" || r.ProjectCount != 0 || r.RelationCount != 0 || r.ProposalStatus != "PARTIAL" {
+		t.Fatal("unsafe proposal status")
+	}
+	if strings.Join(r.ExcludeDirNames, ",") != "build,node_modules" || strings.Join(r.ExcludedBoundaries, ",") != "build,node_modules" {
+		t.Fatalf("scope not retained: %#v %#v", r.ExcludeDirNames, r.ExcludedBoundaries)
+	}
+	expected := map[string]bool{"gradle.project": false, "gradle.included-project": false, "maven.project": false, "maven.module": false, "cargo.package": false, "cargo.member": false, "python.project": false}
+	for _, e := range r.ProposedEntities {
+		if _, ok := expected[e.Kind]; ok {
+			if e.Status != "PROPOSED" || e.DeclarationPath == "" || len(e.Evidence) == 0 {
+				t.Fatal("incomplete declaration provenance")
+			}
+			expected[e.Kind] = true
+		}
+		if strings.Contains(e.Path, "node_modules") || strings.Contains(e.Name, "hidden-sentinel") {
+			t.Fatal("excluded subtree leaked")
+		}
+	}
+	for k, v := range expected {
+		if !v {
+			t.Fatalf("missing proposal %s", k)
+		}
+	}
+	if r.Observed["maven.project"] != 1 || r.Observed["python.project"] != 1 {
+		t.Fatal("excluded manifests observed")
+	}
+	count := 0
+	for _, c := range r.StructuralCandidates {
+		if c.Confidence == "UNRESOLVED" && c.ReviewRequired && strings.Contains(strings.Join(c.ReviewReasons, ","), "static_manifest_partial") {
+			count++
+		}
+	}
+	if count != 4 {
+		t.Fatalf("new manifest candidate count %d", count)
+	}
+	again, err := draft(t, root, "--json", "--exclude-dir-name", "build", "--exclude-dir-name", "node_modules")
+	if err != nil || out != again {
+		t.Fatal("scope normalization not deterministic")
+	}
+	yaml, err := draft(t, root, "--exclude-dir-name", "build", "--exclude-dir-name", "node_modules")
+	if err != nil || !strings.Contains(yaml, "# SCAN_SCOPE:") {
+		t.Fatal("scoped YAML missing scope provenance")
+	}
+	if _, err := os.Stat(config.Path(root)); !os.IsNotExist(err) {
+		t.Fatal("draft created target manifest")
+	}
+	for _, bad := range [][]string{{"--exclude-dir-name"}, {"--exclude-dir-name", "a/b"}, {"--exclude-dir-name", "build", "--exclude-dir-name", "build"}} {
+		if _, err := draft(t, root, bad...); err == nil {
+			t.Fatal("invalid scope accepted")
+		}
+	}
+}
+
+func TestManifestDraftTrimKeepsRelationEndpoints(t *testing.T) {
+	r := manifestDraftReport{Status: "DRAFT", Mutation: "NONE"}
+	for i := 0; i < 24; i++ {
+		id := fmt.Sprintf("entity-%02d", i)
+		r.ProposedEntities = append(r.ProposedEntities, proposalEntity{ID: id, Kind: "directory", Name: strings.Repeat("n", 80), Path: strings.Repeat("p", 80), Status: "PROPOSED"})
+		if i > 0 {
+			r.ProposedRelations = append(r.ProposedRelations, proposalRelation{ID: fmt.Sprintf("edge-%02d", i), From: "entity-00", To: id, Status: "PROPOSED"})
+		}
+	}
+	r.TotalEntities = len(r.ProposedEntities)
+	r.TotalRelations = len(r.ProposedRelations)
+	out, err := marshalBoundedDraftReport(&r, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got manifestDraftReport
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, e := range got.ProposedEntities {
+		ids[e.ID] = true
+	}
+	for _, e := range got.ProposedRelations {
+		if !ids[e.From] || !ids[e.To] {
+			t.Fatal("dangling relation")
+		}
+	}
+	if got.OmittedEntities == 0 || got.OmittedRelations == 0 || got.TotalRelations != len(got.ProposedRelations)+got.OmittedRelations || got.ProposalStatus != "PARTIAL" {
+		t.Fatal("inconsistent trim counts")
+	}
+}
+
+func TestManifestDraftIgnoredStaticDeclarationIsPhysicalOnly(t *testing.T) {
+	root := manifestFixture(t, map[string]string{".gitignore": "android/\n", "package.json": "{\"name\":\"demo\"}"})
+	if err := os.MkdirAll(filepath.Join(root, "android"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "android", "settings.gradle"), []byte("rootProject.name = 'demo'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := draft(t, root, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r manifestDraftReport
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range r.ProposedEntities {
+		if e.Kind == "gradle.project" {
+			found = e.GitIgnoredSource && e.DeclarationPath == "android/settings.gradle"
+		}
+	}
+	if !found {
+		t.Fatal("ignored physical observation is missing its source classification")
+	}
+	for _, c := range r.StructuralCandidates {
+		if c.Path == "android" || strings.HasPrefix(c.Path, "android/") {
+			t.Fatal("ignored source became structural candidate")
+		}
+	}
+}
+
+func TestManifestDraftReportsOmittedCandidateParent(t *testing.T) {
+	report := manifestDraftReport{
+		Status: "DRAFT", Mutation: "NONE",
+		StructuralCandidates: []proposalCandidate{
+			{ID: "child", Path: "modules/java", ParentID: "parent", Confidence: "UNRESOLVED", ReviewRequired: true},
+			{ID: "root", Path: ".", Confidence: "WEAK"},
+			{ID: "other", Path: "modules/other", ParentID: "root", Confidence: "WEAK"},
+		},
+		TotalCandidates: 4,
+	}
+	raw, err := marshalBoundedDraftReport(&report, 16384)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got manifestDraftReport
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.StructuralCandidates[0].ParentOmitted || got.StructuralCandidates[0].ParentID != "parent" {
+		t.Fatal("omitted parent not preserved and marked")
+	}
+	if got.StructuralCandidates[1].ParentOmitted || got.StructuralCandidates[2].ParentOmitted {
+		t.Fatal("visible or root parent incorrectly marked omitted")
+	}
+	if got.OmittedCandidates != 1 || got.ProposalStatus != "PARTIAL" {
+		t.Fatal("omission status incorrect")
 	}
 }

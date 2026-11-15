@@ -23,12 +23,14 @@ const (
 )
 
 type proposalEntity struct {
-	ID       string   `json:"id"`
-	Kind     string   `json:"kind"`
-	Name     string   `json:"name"`
-	Path     string   `json:"path"`
-	Status   string   `json:"status"`
-	Evidence []string `json:"evidence_refs,omitempty"`
+	ID               string   `json:"id"`
+	Kind             string   `json:"kind"`
+	Name             string   `json:"name"`
+	Path             string   `json:"path"`
+	Status           string   `json:"status"`
+	Evidence         []string `json:"evidence_refs,omitempty"`
+	DeclarationPath  string   `json:"declaration_path,omitempty"`
+	GitIgnoredSource bool     `json:"git_ignored_source,omitempty"`
 }
 
 type proposalRelation struct {
@@ -48,6 +50,7 @@ type proposalCandidate struct {
 	Path           string   `json:"path"`
 	Label          string   `json:"label"`
 	ParentID       string   `json:"parent_id,omitempty"`
+	ParentOmitted  bool     `json:"parent_omitted,omitempty"`
 	Confidence     string   `json:"confidence"`
 	ReviewRequired bool     `json:"review_required"`
 	ReviewReasons  []string `json:"review_reasons,omitempty"`
@@ -60,40 +63,43 @@ type proposalUnknown struct {
 }
 
 type manifestDraftReport struct {
-	Status               string              `json:"status"`
-	Mutation             string              `json:"mutation"`
-	Provenance           string              `json:"provenance"`
-	RepositoryID         string              `json:"repository_id"`
-	Revision             string              `json:"revision"`
-	WorkingTree          string              `json:"working_tree"`
-	DraftBytes           int                 `json:"draft_bytes"`
-	WorkspaceID          string              `json:"workspace_id"`
-	RepositoryCount      int                 `json:"repository_count"`
-	ProjectCount         int                 `json:"project_count"`
-	RelationCount        int                 `json:"relation_count"`
-	Scanner              string              `json:"scanner"`
-	Coverage             []scanner.Coverage  `json:"coverage"`
-	Observed             map[string]int      `json:"observed_counts"`
-	Unknowns             map[string]int      `json:"unknown_counts"`
-	Candidates           int                 `json:"candidate_count"`
-	ProposalStatus       string              `json:"proposal_status"`
-	ProposedEntities     []proposalEntity    `json:"proposed_entities"`
-	ProposedRelations    []proposalRelation  `json:"proposed_relations"`
-	StructuralCandidates []proposalCandidate `json:"structural_candidates"`
-	ProposedUnknowns     []proposalUnknown   `json:"proposed_unknowns"`
-	OmittedEntities      int                 `json:"omitted_entities"`
-	OmittedRelations     int                 `json:"omitted_relations"`
-	OmittedCandidates    int                 `json:"omitted_candidates"`
-	OmittedUnknowns      int                 `json:"omitted_unknowns"`
-	TotalEntities        int                 `json:"total_entities"`
-	ReturnedEntities     int                 `json:"returned_entities"`
-	TotalRelations       int                 `json:"total_relations"`
-	ReturnedRelations    int                 `json:"returned_relations"`
-	TotalCandidates      int                 `json:"total_candidates"`
-	ReturnedCandidates   int                 `json:"returned_candidates"`
-	TotalUnknowns        int                 `json:"total_unknowns"`
-	ReturnedUnknowns     int                 `json:"returned_unknowns"`
-	Draft                string              `json:"draft,omitempty"`
+	Status                      string              `json:"status"`
+	Mutation                    string              `json:"mutation"`
+	Provenance                  string              `json:"provenance"`
+	RepositoryID                string              `json:"repository_id"`
+	Revision                    string              `json:"revision"`
+	WorkingTree                 string              `json:"working_tree"`
+	DraftBytes                  int                 `json:"draft_bytes"`
+	WorkspaceID                 string              `json:"workspace_id"`
+	RepositoryCount             int                 `json:"repository_count"`
+	ProjectCount                int                 `json:"project_count"`
+	RelationCount               int                 `json:"relation_count"`
+	Scanner                     string              `json:"scanner"`
+	ExcludeDirNames             []string            `json:"exclude_dir_names,omitempty"`
+	ExcludedBoundaries          []string            `json:"excluded_boundaries,omitempty"`
+	ExcludedBoundariesTruncated bool                `json:"excluded_boundaries_truncated,omitempty"`
+	Coverage                    []scanner.Coverage  `json:"coverage"`
+	Observed                    map[string]int      `json:"observed_counts"`
+	Unknowns                    map[string]int      `json:"unknown_counts"`
+	Candidates                  int                 `json:"candidate_count"`
+	ProposalStatus              string              `json:"proposal_status"`
+	ProposedEntities            []proposalEntity    `json:"proposed_entities"`
+	ProposedRelations           []proposalRelation  `json:"proposed_relations"`
+	StructuralCandidates        []proposalCandidate `json:"structural_candidates"`
+	ProposedUnknowns            []proposalUnknown   `json:"proposed_unknowns"`
+	OmittedEntities             int                 `json:"omitted_entities"`
+	OmittedRelations            int                 `json:"omitted_relations"`
+	OmittedCandidates           int                 `json:"omitted_candidates"`
+	OmittedUnknowns             int                 `json:"omitted_unknowns"`
+	TotalEntities               int                 `json:"total_entities"`
+	ReturnedEntities            int                 `json:"returned_entities"`
+	TotalRelations              int                 `json:"total_relations"`
+	ReturnedRelations           int                 `json:"returned_relations"`
+	TotalCandidates             int                 `json:"total_candidates"`
+	ReturnedCandidates          int                 `json:"returned_candidates"`
+	TotalUnknowns               int                 `json:"total_unknowns"`
+	ReturnedUnknowns            int                 `json:"returned_unknowns"`
+	Draft                       string              `json:"draft,omitempty"`
 }
 
 func manifestCommand(args []string) error {
@@ -112,7 +118,7 @@ func manifestCommand(args []string) error {
 }
 
 func manifestUsage() {
-	fmt.Print(`Usage: wsp manifest draft [repository] [--json] [--max-output-bytes N]
+	fmt.Print(`Usage: wsp manifest draft [repository] [--json] [--max-output-bytes N] [--exclude-dir-name NAME ...]
        wsp manifest validate --input FILE [--json]
 
 draft prints a deterministic, preview-only DRAFT; it never creates .wsp,
@@ -121,6 +127,7 @@ cannot be represented safely remain proposed evidence/UNKNOWN in bounded JSON.
 The JSON companion lists concrete paths and PROPOSED graph edges; it does not
 install them as Lens-visible manifest relations.
 The default output budget is 16384 bytes; over-budget output fails whole.
+Explicit directory exclusions use Scanner basename scope; no default exclusions.
 validate reads and validates a draft file without installing it or changing the
 target. Human review and the existing authorized manifest workflow remain the
 acceptance gate.
@@ -128,7 +135,7 @@ acceptance gate.
 }
 
 func manifestDraftCommand(args []string) error {
-	root, jsonOut, budget, err := parseManifestDraftArgs(args)
+	root, jsonOut, budget, exclusions, err := parseManifestDraftArgs(args)
 	if err != nil {
 		return fail("USAGE", err.Error(), 2)
 	}
@@ -162,11 +169,12 @@ func manifestDraftCommand(args []string) error {
 	if strings.TrimSpace(subjectID) == "repository:" {
 		subjectID = "repository:" + base
 	}
-	batch, err := scanner.Observe(scanner.Request{Path: abs, SubjectID: subjectID})
+	scanConfig := scanner.Config{ExcludeDirNames: exclusions}
+	batch, err := scanner.Observe(scanner.Request{Path: abs, SubjectID: subjectID, Config: scanConfig})
 	if err != nil {
 		return fail("INVALID_REQUEST", "scanner observation failed: "+err.Error(), 2)
 	}
-	snapshot, err := scanner.BuildSnapshot(batch, scanner.Config{})
+	snapshot, err := scanner.BuildSnapshot(batch, scanConfig)
 	if err != nil {
 		return fail("INTERNAL_FAILURE", "scanner snapshot validation failed: "+err.Error(), 1)
 	}
@@ -195,6 +203,19 @@ func manifestDraftCommand(args []string) error {
 	for _, u := range snapshot.Unknowns {
 		unknowns[u.Kind]++
 	}
+	var excludedBoundaries []string
+	excludedTruncated := false
+	for _, n := range snapshot.Nodes {
+		if n.Attributes["opaque"] == "configured_exclusion" {
+			excludedBoundaries = append(excludedBoundaries, n.Coordinate)
+		}
+	}
+	sort.Strings(excludedBoundaries)
+	for _, d := range snapshot.Diagnostics {
+		if d.Code == "EXCLUDED_BOUNDARIES_TRUNCATED" {
+			excludedTruncated = true
+		}
+	}
 	proposedEntities, omittedEntities, selectedNodes := proposedScannerEntities(snapshot.Nodes)
 	proposedRelations, omittedRelations := proposedScannerRelations(snapshot.Edges, selectedNodes)
 	structuralCandidates, omittedCandidates := proposedScannerCandidates(candidates.Candidates)
@@ -202,12 +223,17 @@ func manifestDraftCommand(args []string) error {
 	draft := "# STATUS: DRAFT (preview only; Human review required)\n# PROVENANCE: scanner-proposed; physical evidence does not accept Project semantics\n# REVIEW: no Project ownership, maturity, deployment, session, or logical relations are inferred\n" +
 		"# COVERAGE: " + coverageSummary(coverage) + "\n" +
 		"# EVIDENCE: observed_counts=" + countSummary(observed) + "; unknown_counts=" + countSummary(unknowns) + "; candidates=" + strconv.Itoa(len(candidates.Candidates)) + "\n" + string(body)
+	if len(snapshot.Config.ExcludeDirNames) > 0 {
+		names, _ := json.Marshal(snapshot.Config.ExcludeDirNames)
+		draft = "# SCAN_SCOPE: explicit directory basename exclusions=" + string(names) + "; opaque boundaries recorded in JSON review\n" + draft
+	}
 	report := manifestDraftReport{
 		Status: "DRAFT", Mutation: "NONE", Provenance: "scanner-proposed",
 		RepositoryID: repoID, Revision: revision, WorkingTree: workingTree,
 		DraftBytes: len(draft), WorkspaceID: workspaceID, RepositoryCount: 1,
 		ProjectCount: 0, RelationCount: 0, Scanner: snapshot.Producer.ID + "/" + snapshot.Producer.Version,
 		Coverage: coverage, Observed: observed, Unknowns: unknowns, Candidates: len(candidates.Candidates),
+		ExcludeDirNames: snapshot.Config.ExcludeDirNames, ExcludedBoundaries: excludedBoundaries, ExcludedBoundariesTruncated: excludedTruncated,
 		ProposedEntities: proposedEntities, ProposedRelations: proposedRelations,
 		StructuralCandidates: structuralCandidates, ProposedUnknowns: proposedUnknowns,
 		OmittedEntities: omittedEntities, OmittedRelations: omittedRelations,
@@ -238,7 +264,7 @@ func manifestDraftCommand(args []string) error {
 }
 
 func proposalCoverageStatus(report manifestDraftReport) string {
-	if report.OmittedEntities+report.OmittedRelations+report.OmittedCandidates+report.OmittedUnknowns > 0 || len(report.ProposedUnknowns) > 0 {
+	if len(report.ExcludeDirNames) > 0 || report.OmittedEntities+report.OmittedRelations+report.OmittedCandidates+report.OmittedUnknowns > 0 || len(report.ProposedUnknowns) > 0 {
 		return "PARTIAL"
 	}
 	for _, item := range report.Coverage {
@@ -251,6 +277,27 @@ func proposalCoverageStatus(report manifestDraftReport) string {
 
 func marshalBoundedDraftReport(report *manifestDraftReport, budget int) ([]byte, error) {
 	for {
+		// Output-budget trimming must not leave proposed edges whose endpoints
+		// are absent. Their omission is reflected in the existing counters.
+		visible := make(map[string]bool, len(report.ProposedEntities))
+		for _, entity := range report.ProposedEntities {
+			visible[entity.ID] = true
+		}
+		relations := report.ProposedRelations[:0]
+		for _, relation := range report.ProposedRelations {
+			if visible[relation.From] && visible[relation.To] {
+				relations = append(relations, relation)
+			}
+		}
+		report.ProposedRelations = relations
+		candidateIDs := make(map[string]bool, len(report.StructuralCandidates))
+		for _, candidate := range report.StructuralCandidates {
+			candidateIDs[candidate.ID] = true
+		}
+		for i := range report.StructuralCandidates {
+			candidate := &report.StructuralCandidates[i]
+			candidate.ParentOmitted = candidate.ParentID != "" && !candidateIDs[candidate.ParentID]
+		}
 		report.ReturnedEntities = len(report.ProposedEntities)
 		report.ReturnedRelations = len(report.ProposedRelations)
 		report.ReturnedCandidates = len(report.StructuralCandidates)
@@ -322,10 +369,22 @@ func countSummary(counts map[string]int) string {
 }
 
 func proposedScannerEntities(nodes []scanner.Node) ([]proposalEntity, int, map[string]scanner.Node) {
-	priority := map[string]int{"go.module": 0, "npm.package": 0, "go.package": 0, "pnpm.workspace": 1, "go.workspace": 1, "directory": 2}
+	priority := map[string]int{
+		"go.module": 0, "npm.package": 0, "go.package": 0,
+		"gradle.project": 0, "maven.project": 0, "cargo.package": 0, "python.project": 0,
+		"pnpm.workspace": 1, "go.workspace": 1,
+		"gradle.included-project": 1, "maven.module": 1, "cargo.member": 1,
+		"directory": 2,
+	}
 	selected := make([]scanner.Node, 0, len(nodes))
+	var ignored []string
 	for _, n := range nodes {
-		if _, ok := priority[n.Kind]; ok {
+		if n.Kind == "git.ignored" {
+			ignored = append(ignored, n.Coordinate)
+		}
+	}
+	for _, n := range nodes {
+		if _, ok := priority[n.Kind]; ok && n.Attributes["opaque"] != "configured_exclusion" {
 			selected = append(selected, n)
 		}
 	}
@@ -352,7 +411,32 @@ func proposedScannerEntities(nodes []scanner.Node) ([]proposalEntity, int, map[s
 		}
 		refs := append([]string(nil), n.EvidenceRefs...)
 		sort.Strings(refs)
-		out = append(out, proposalEntity{ID: n.ID, Kind: n.Kind, Name: n.Name, Path: path, Status: "PROPOSED", Evidence: refs})
+		proposal := proposalEntity{ID: n.ID, Kind: n.Kind, Name: n.Name, Path: path, Status: "PROPOSED", Evidence: refs}
+		var suffix string
+		switch n.Kind {
+		case "gradle.project", "maven.project", "python.project":
+			suffix = "#project"
+		case "cargo.package":
+			suffix = "#package"
+		case "gradle.included-project":
+			suffix = "#include/"
+		case "maven.module":
+			suffix = "#module/"
+		case "cargo.member":
+			suffix = "#member/"
+		}
+		if suffix != "" {
+			if i := strings.LastIndex(n.Coordinate, suffix); i >= 0 {
+				proposal.DeclarationPath = n.Coordinate[:i]
+				for _, ignoredPath := range ignored {
+					if ignoredPath == "." || proposal.DeclarationPath == ignoredPath || strings.HasPrefix(proposal.DeclarationPath, ignoredPath+"/") {
+						proposal.GitIgnoredSource = true
+						break
+					}
+				}
+			}
+		}
+		out = append(out, proposal)
 		byID[n.ID] = n
 	}
 	return out, total - len(out), byID
@@ -405,7 +489,21 @@ func proposedScannerRelations(edges []scanner.Edge, nodes map[string]scanner.Nod
 
 func proposedScannerCandidates(candidates []scanner.Candidate) ([]proposalCandidate, int) {
 	items := append([]scanner.Candidate(nil), candidates...)
-	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	staticManifest := func(item scanner.Candidate) bool {
+		for _, reason := range item.ReviewReasons {
+			if reason == "static_manifest_partial" {
+				return true
+			}
+		}
+		return false
+	}
+	sort.Slice(items, func(i, j int) bool {
+		a, b := staticManifest(items[i]), staticManifest(items[j])
+		if a != b {
+			return a
+		}
+		return items[i].ID < items[j].ID
+	})
 	total := len(items)
 	if len(items) > maxProposalCandidates {
 		items = items[:maxProposalCandidates]
@@ -439,39 +537,52 @@ func proposedScannerUnknowns(unknowns []scanner.Unknown) ([]proposalUnknown, int
 	return out, total - len(out)
 }
 
-func parseManifestDraftArgs(args []string) (string, bool, int, error) {
+func parseManifestDraftArgs(args []string) (string, bool, int, []string, error) {
 	root, jsonOut, budget := ".", false, defaultManifestOutputBudget
 	seenRoot, seenJSON, seenBudget := false, false, false
+	var exclusions []string
+	seenExclusions := map[string]bool{}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--json":
 			if seenJSON {
-				return "", false, 0, fmt.Errorf("repeated --json")
+				return "", false, 0, nil, fmt.Errorf("repeated --json")
 			}
 			seenJSON = true
 			jsonOut = true
 		case "--max-output-bytes":
 			if seenBudget || i+1 >= len(args) {
-				return "", false, 0, fmt.Errorf("--max-output-bytes requires one value")
+				return "", false, 0, nil, fmt.Errorf("--max-output-bytes requires one value")
 			}
 			seenBudget = true
 			i++
 			n, err := strconv.Atoi(args[i])
 			if err != nil || n < 1024 || n > 1<<20 {
-				return "", false, 0, fmt.Errorf("--max-output-bytes must be between 1024 and 1048576")
+				return "", false, 0, nil, fmt.Errorf("--max-output-bytes must be between 1024 and 1048576")
 			}
 			budget = n
+		case "--exclude-dir-name":
+			if i+1 >= len(args) {
+				return "", false, 0, nil, fmt.Errorf("--exclude-dir-name requires one directory basename")
+			}
+			i++
+			name := args[i]
+			if !scanner.ValidDirectoryName(name) || seenExclusions[name] {
+				return "", false, 0, nil, fmt.Errorf("invalid or repeated --exclude-dir-name %q", name)
+			}
+			seenExclusions[name] = true
+			exclusions = append(exclusions, name)
 		default:
 			if strings.HasPrefix(args[i], "-") {
-				return "", false, 0, fmt.Errorf("unsupported option %s", args[i])
+				return "", false, 0, nil, fmt.Errorf("unsupported option %s", args[i])
 			}
 			if seenRoot {
-				return "", false, 0, fmt.Errorf("one repository target allowed")
+				return "", false, 0, nil, fmt.Errorf("one repository target allowed")
 			}
 			root, seenRoot = args[i], true
 		}
 	}
-	return targetPath(root), jsonOut, budget, nil
+	return targetPath(root), jsonOut, budget, exclusions, nil
 }
 
 func manifestValidateCommand(args []string) error {
