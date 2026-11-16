@@ -46,10 +46,9 @@ jobs:
         run: |
           go test ./...
           go vet ./...
-          chmod +x tests/selftest.sh scripts/build-dist.sh
           bash tests/selftest.sh
       - name: Build release assets
-        run: ./scripts/build-dist.sh "$VERSION"
+        run: sh scripts/build-dist.sh "$VERSION"
       - name: Verify checksums
         run: |
           cd dist

@@ -25,6 +25,14 @@ case "$VERSION" in
     ;;
 esac
 
+# Release candidates must carry truthful, clean Git provenance.
+# Reject a dirty checkout before touching any output.
+EXPECTED_REVISION=$(git rev-parse HEAD)
+if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+  printf 'distribution requires a clean Git checkout\n' >&2
+  exit 2
+fi
+
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR/stage"
 
@@ -41,6 +49,13 @@ build_one() {
   binary_go=$(go version -m "$stage/wsp" | awk 'NR == 1 { print $NF }')
   if [ "$binary_go" != "$EXPECTED_GO" ]; then
     printf 'binary toolchain mismatch: %s: expected %s, got %s\n' "$name" "$EXPECTED_GO" "$binary_go" >&2
+    exit 2
+  fi
+
+  binary_revision=$(go version -m "$stage/wsp" | awk '$1 == "build" && $2 ~ /^vcs.revision=/ { sub(/^vcs.revision=/, "", $2); print $2 }')
+  binary_modified=$(go version -m "$stage/wsp" | awk '$1 == "build" && $2 ~ /^vcs.modified=/ { sub(/^vcs.modified=/, "", $2); print $2 }')
+  if [ "$binary_revision" != "$EXPECTED_REVISION" ] || [ "$binary_modified" != false ]; then
+    printf 'binary provenance mismatch: %s: revision=%s modified=%s\n' "$name" "$binary_revision" "$binary_modified" >&2
     exit 2
   fi
 

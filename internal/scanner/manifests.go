@@ -215,6 +215,11 @@ func observeManifests(s Subject, b *ObservationBatch, files map[string]observedF
 		workspaceRef := evidence(b, "pnpm_workspace", rel, 0, 0, "packages")
 		workspaceID := addManifestNode(s, b, "pnpm.workspace", coord, "pnpm-workspace.yaml", map[string]string{"directory": workspaceDir}, workspaceRef)
 		matched := map[string]bool{}
+		// pnpm includes the workspace root package when its manifest is observed.
+		// Never invent a package for an absent or invalid root manifest.
+		if id, ok := npmPkgs[path.Join(workspaceDir, "package.json")]; ok {
+			matched[id] = true
+		}
 		for _, pattern := range patterns {
 			count := 0
 			for packageFile := range npmPkgs {
@@ -415,7 +420,9 @@ func hasUnknownKind(b *ObservationBatch, kind string) bool {
 
 func pnpmWorkspacePatterns(src string) ([]string, string) {
 	patterns := []string{}
-	section, found := false, false
+	section := ""
+	found, allowBuildsSeen := false, false
+	allowBuildsKeys := map[string]bool{}
 	for _, raw := range strings.Split(src, "\n") {
 		line := strings.TrimRight(raw, " \t\r")
 		trim := strings.TrimSpace(line)
@@ -423,17 +430,44 @@ func pnpmWorkspacePatterns(src string) ([]string, string) {
 			continue
 		}
 		indent := len(line) - len(strings.TrimLeft(line, " "))
+		if strings.HasPrefix(line[indent:], "\t") {
+			return nil, "unsupported_yaml_structure"
+		}
 		if indent == 0 {
-			if trim == "packages:" {
+			switch trim {
+			case "packages:":
 				if found {
 					return nil, "duplicate_packages_key"
 				}
-				found, section = true, true
-				continue
+				found, section = true, "packages"
+			case "allowBuilds:":
+				if allowBuildsSeen {
+					return nil, "unsupported_yaml_structure"
+				}
+				allowBuildsSeen, section = true, "allowBuilds"
+			default:
+				return nil, "unsupported_yaml_structure"
 			}
-			return nil, "unsupported_yaml_structure"
+			continue
 		}
-		if !section || indent != 2 || !strings.HasPrefix(trim, "- ") {
+		if section == "allowBuilds" {
+			// Recognize only a static, flat, literal boolean map. This section
+			// is not membership and is never evaluated as build permission.
+			if indent != 2 {
+				return nil, "unsupported_yaml_structure"
+			}
+			item := trim
+			if i := strings.Index(item, " #"); i >= 0 {
+				item = strings.TrimSpace(item[:i])
+			}
+			key, value, ok := strings.Cut(item, ":")
+			if !ok || !strings.HasPrefix(value, " ") || !literalPnpmBuildKey(key) || (strings.TrimSpace(value) != "true" && strings.TrimSpace(value) != "false") || allowBuildsKeys[key] {
+				return nil, "unsupported_yaml_structure"
+			}
+			allowBuildsKeys[key] = true
+			continue
+		}
+		if section != "packages" || indent != 2 || !strings.HasPrefix(trim, "- ") {
 			return nil, "unsupported_yaml_structure"
 		}
 		value := strings.TrimSpace(strings.TrimPrefix(trim, "- "))
@@ -469,6 +503,9 @@ func pnpmWorkspacePatterns(src string) ([]string, string) {
 		}
 		patterns = append(patterns, value)
 	}
+	if allowBuildsSeen && len(allowBuildsKeys) == 0 {
+		return nil, "unsupported_yaml_structure"
+	}
 	if !found {
 		return nil, "packages_key_missing"
 	}
@@ -477,6 +514,21 @@ func pnpmWorkspacePatterns(src string) ([]string, string) {
 	}
 	sort.Strings(patterns)
 	return uniqueStrings(patterns), ""
+}
+
+// Only unquoted simple npm package labels are recognized in this bounded
+// metadata form. All other YAML forms remain explicitly unsupported.
+func literalPnpmBuildKey(key string) bool {
+	if key == "" || key == "true" || key == "false" || key == "null" || key == "yes" || key == "no" || key == "on" || key == "off" {
+		return false
+	}
+	for i, c := range key {
+		if (c >= 'a' && c <= 'z') || (i > 0 && ((c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.')) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func packageCoordinate(b *ObservationBatch, id string) string {

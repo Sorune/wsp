@@ -241,24 +241,28 @@ func Derive(s PhysicalSnapshot) (DerivedCandidateSet, error) {
 		}
 	}
 
+	// Index exactly the same eligible package families by physical coordinate.
+	packagesAt := map[string]map[string]bool{}
+	for _, n := range deriveNodes {
+		if n.Kind != "go.package" {
+			continue
+		}
+		c := cleanCoordinate(n.Attributes["directory"])
+		if c == "" {
+			c = cleanCoordinate(derivationNodePath(n))
+		}
+		pkg := n.Attributes["package"]
+		if pkg == "" {
+			pkg = n.Name
+		}
+		if packagesAt[c] == nil {
+			packagesAt[c] = map[string]bool{}
+		}
+		packagesAt[c][packageFamily(pkg)] = true
+	}
 	// Detect conflicting package identities at a single physical boundary.
 	for _, x := range seeds {
-		pkgs := map[string]bool{}
-		for _, n := range deriveNodes {
-			if n.Kind == "go.package" {
-				c := cleanCoordinate(n.Attributes["directory"])
-				if c == "" {
-					c = cleanCoordinate(derivationNodePath(n))
-				}
-				if c == x.coord {
-					pkg := n.Attributes["package"]
-					if pkg == "" {
-						pkg = n.Name
-					}
-					pkgs[packageFamily(pkg)] = true
-				}
-			}
-		}
+		pkgs := packagesAt[x.coord]
 		if len(pkgs) > 1 {
 			x.reasons["package_identity_conflict"] = true
 		}
@@ -373,6 +377,10 @@ func Derive(s PhysicalSnapshot) (DerivedCandidateSet, error) {
 	for id, c := range dirCoords {
 		dirNodeAt[c] = id
 	}
+	candidateAt := make(map[string]string, len(out.Candidates))
+	for _, c := range out.Candidates {
+		candidateAt[c.Coordinate] = c.ID
+	}
 	for i := range out.Candidates {
 		cur := dirNodeAt[out.Candidates[i].Coordinate]
 		seen := map[string]bool{}
@@ -381,12 +389,9 @@ func Derive(s PhysicalSnapshot) (DerivedCandidateSet, error) {
 			seen[p] = true
 			cur = p
 			if pc, ok := dirCoords[p]; ok {
-				for j := range out.Candidates {
-					if out.Candidates[j].Coordinate == pc {
-						out.Candidates[i].ParentID = out.Candidates[j].ID
-						cur = ""
-						break
-					}
+				if id, exists := candidateAt[pc]; exists {
+					out.Candidates[i].ParentID = id
+					cur = ""
 				}
 			}
 		}
@@ -480,8 +485,13 @@ func ignoredPathSet(nodes []Node) map[string]bool {
 
 func isIgnoredPath(coord string, ignored map[string]bool) bool {
 	coord = cleanCoordinate(coord)
-	for root := range ignored {
-		if root == "." || coord == root || strings.HasPrefix(coord, root+"/") {
+	if ignored["."] || ignored[coord] {
+		return true
+	}
+	// Exact ancestor-prefix lookup, without treating siblings as descendants.
+	for i := strings.LastIndexByte(coord, '/'); i >= 0; i = strings.LastIndexByte(coord, '/') {
+		coord = coord[:i]
+		if ignored[coord] {
 			return true
 		}
 	}

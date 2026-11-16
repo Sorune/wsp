@@ -32,8 +32,6 @@ jobs:
           cache-dependency-path: go.mod
       - name: Verify exact Go toolchain
         run: test "$(go env GOVERSION)" = "go$(cat .go-version)"
-      - name: Normalize executable bits
-        run: chmod +x bin/wsp tests/selftest.sh tests/conformance.sh
       - name: Bash syntax
         run: bash -n bin/wsp tests/selftest.sh tests/conformance.sh
       - name: Go tests

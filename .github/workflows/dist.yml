@@ -27,9 +27,7 @@ jobs:
       - name: Verify exact Go toolchain
         run: test "$(go env GOVERSION)" = "go$(cat .go-version)"
       - name: Build distribution candidates
-        run: |
-          chmod +x scripts/build-dist.sh
-          ./scripts/build-dist.sh
+        run: sh scripts/build-dist.sh
       - name: Verify archive set and checksums
         run: |
           test "$(find dist -maxdepth 1 -type f -name 'wsp_*.tar.gz' | wc -l)" -eq 4

@@ -94,9 +94,13 @@ directories or semantic edges. Ignored and excluded sources remain outside
 candidate derivation.
 
 pnpm `packages:` entries support literal paths and deterministic single-segment
-`*` globs matched against observed `package.json` directories. Other YAML
-structures, dynamic or unsupported glob syntax, malformed input, and patterns
-with no observed package remain UNKNOWN/PARTIAL. Unsupported or incomplete
+`*` globs matched against observed `package.json` directories.
+The v0.7.2 maintenance candidate also recognizes an observed root package and
+a strictly bounded, flat `allowBuilds:` map with simple unquoted package keys
+and literal boolean values. It does not derive execution permission or execute
+pnpm. Unsupported YAML structures, duplicate keys, dynamic or unsupported glob
+syntax, malformed input, and patterns with no observed package remain
+UNKNOWN/PARTIAL. Unsupported or incomplete
 observation is reported through coverage, unknowns, and diagnostics rather
 than converted into absence. New ecosystem coverage keys are omitted when no
 matching manifest exists, preserving prior output for repositories without
@@ -112,6 +116,10 @@ A candidate difference computed across producer versions is not source drift.
 The v0.7.1 release updates the build toolchain and CI dependencies without
 changing Scanner observation or derivation models. Re-scan both artifacts
 with v0.7.1 before comparing; an older producer version is not source drift.
+The v0.7.2 candidate retains both model versions, improves bounded pnpm
+observations, and indexes existing derivation lookups. Rescan both sides with
+the identical released producer and configuration before future comparisons.
+No v0.7.2 release is asserted here.
 
 Git repository-root evidence uses the subject-relative coordinate ".", not
 the local checkout directory. Identical paths relative to the subject,
