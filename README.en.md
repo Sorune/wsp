@@ -1,4 +1,6 @@
-# wsp
+# Workspace Ops (wsp)
+
+[한국어](README.md) · [English](README.en.md)
 
 `wsp` is a local development workspace semantic product. It observes Git and
 filesystem facts, combines them with explicit local relations, and presents one
@@ -27,10 +29,10 @@ Download the archive matching your operating system and architecture from the
 GitHub Release, place the `wsp` binary on your PATH, and start with `wsp doctor`.
 
 ```text
-wsp_0.2.0_linux_amd64.tar.gz
-wsp_0.2.0_linux_arm64.tar.gz
-wsp_0.2.0_darwin_amd64.tar.gz
-wsp_0.2.0_darwin_arm64.tar.gz
+wsp_<version>_linux_amd64.tar.gz
+wsp_<version>_linux_arm64.tar.gz
+wsp_<version>_darwin_amd64.tar.gz
+wsp_<version>_darwin_arm64.tar.gz
 SHA256SUMS
 ```
 
@@ -47,8 +49,7 @@ wsp lens tree /path/to/existing/workspace --axis logical
 wsp repo inspect /path/to/repository
 ```
 
-Source-mode development still requires Go 1.21+, and the WSP source checkout
-should remain separate from the workspace it observes.
+The Go source compatibility floor is 1.21. Use a supported Go toolchain; distribution builds and CI pin the exact toolchain in .go-version.
 
 The Workspace Root does not have to be a Git repository. If the explicit root is
 itself an observable Git top-level, init may record that repository relation as
@@ -63,9 +64,11 @@ wsp init [path]
 wsp inspect [path] [--json]
 wsp repo inspect [path] [--json]
 wsp lens tree [path] --axis logical|session [--json]
-wsp scanner scan <repository> --subject-id ID [--artifact snapshot|candidates|both]
+wsp scanner scan <repository> --subject-id ID [--artifact snapshot|candidates|both] [--exclude-dir-name NAME ...]
 wsp scanner view --input FILE [--level L0|L1|L2|L3] [...]
 wsp scanner compare --baseline FILE --current FILE [--reference FILE]
+wsp manifest draft [repository] [--json] [--exclude-dir-name NAME ...]
+wsp manifest validate --input FILE [--json]
 wsp status [--json]
 wsp doctor
 wsp version
@@ -105,7 +108,7 @@ The source checkout includes a thin POSIX shell launcher. Semantic behavior is
 implemented by a standard-library-first Go core. V0 targets macOS and Linux;
 native Windows and PowerShell are deferred.
 
-The current public version is `0.2.0`.
+See [GitHub Releases](https://github.com/Sorune/wsp/releases) for the current version and installation assets.
 
 ## Development
 
@@ -116,3 +119,5 @@ bash tests/conformance.sh
 ```
 
 Apache License 2.0.
+
+[Release history](docs/RELEASE_HISTORY.md)

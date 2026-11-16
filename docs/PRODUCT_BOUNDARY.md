@@ -6,7 +6,7 @@ Status: public product contract. Core/Lens remain valid without Scanner; Scanner
 
 `Sorune/wsp` owns public semantic contracts, implementation, serialization, CLI
 behavior, and release behavior. `workspace-ops-public` is reference/demo
-material. `workspace-ops` is private operational control and dogfood.
+material. Private operational controls and dogfood are not part of the product.
 
 `wsp` has no dependency on either private repository.
 

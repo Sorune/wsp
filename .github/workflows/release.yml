@@ -71,4 +71,4 @@ jobs:
             dist/wsp_*.tar.gz \
             dist/SHA256SUMS \
             --title "WSP $TAG" \
-            --generate-notes
+            --notes "Workspace Ops $TAG. See the README and release history for usage, platform support and provenance."

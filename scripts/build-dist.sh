@@ -6,6 +6,7 @@ cd "$ROOT"
 
 VERSION=${1:-$(cat VERSION)}
 OUT_DIR=${OUT_DIR:-dist}
+[ "$VERSION" = "$(cat VERSION)" ] || { echo "distribution version mismatch" >&2; exit 2; }
 
 # Release toolchain is independent of the source language compatibility floor.
 # Check before creating or removing output and forbid automatic switching.
@@ -59,7 +60,7 @@ build_one() {
     exit 2
   fi
 
-  cp LICENSE README.md "$stage/"
+  cp LICENSE README.md README.en.md "$stage/"
   tar -C "$OUT_DIR/stage" -czf "$OUT_DIR/$name.tar.gz" "$name"
 }
 

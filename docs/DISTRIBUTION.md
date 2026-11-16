@@ -1,114 +1,26 @@
-# WSP distribution boundary
+# WSP distribution
 
-Status: `v0.7.1` public stabilization release line, using the validated Human-gated distribution path.
+Compiled WSP binaries require Git, not a Go runtime. The supported binary
+platforms are Linux and macOS, amd64 and arm64. Native Windows is not supported.
 
-## Runtime model
+Download the archive for your OS and architecture and SHA256SUMS from
+[GitHub Releases](https://github.com/Sorune/wsp/releases). Verify its SHA-256,
+extract it and place the executable in a user-selected directory on PATH.
+Never overwrite an unrelated executable. Run wsp version and wsp doctor.
 
-The WSP product does not require a Go runtime when executed as a compiled binary.
-Go is required only for source-mode fallback (`go run ./cmd/wsp`) and for building
-the product.
+## Build from source
 
-Current V0 runtime dependency remains Git because the bundled source adapter is
-Git-first and `wsp doctor` validates Git availability.
+The Go language compatibility floor is 1.21; the release toolchain is pinned in
+.go-version. No third-party Go modules are required. In a clean checkout:
 
-```text
-COMPILED WSP BINARY
-+ Git
-= current V0 runtime surface
-
-Go
-= build/source-mode dependency
+```sh
+export GOTOOLCHAIN=local
+go test ./...
+go vet ./...
+bash tests/selftest.sh
+sh scripts/build-dist.sh
 ```
 
-## Build toolchain policy
-
-The Go language/source compatibility floor remains 1.21 in go.mod; this is
-not a recommendation to run an unsupported Go installation. Use a supported
-Go toolchain for source development. The release and distribution build
-toolchain is pinned separately in .go-version (currently 1.27.4). All CI
-workflows select this exact version with GOTOOLCHAIN=local; the distribution
-builder refuses a different toolchain before writing output and verifies the
-embedded Go version in each binary. CI action references are fixed to full
-upstream release commit SHAs. No third-party Go modules are required.
-
-## Release artifacts
-
-`scripts/build-dist.sh` builds the current supported V0 platform set:
-
-```text
-linux/amd64
-linux/arm64
-darwin/amd64
-darwin/arm64
-```
-
-Each archive contains the `wsp` binary, `README.md`, and `LICENSE`. The builder
-also emits `SHA256SUMS`.
-
-The `Distribution candidate` GitHub Actions workflow validates the archive set,
-checks checksums, smoke-tests the Linux amd64 binary, and uploads the outputs as
-a CI artifact for pre-release evidence.
-
-The `Publish release` workflow is the release mutation owner. A release-version
-change merged to `main` triggers release validation, rebuilds and verifies the
-same asset set, creates the matching `v<version>` tag, and publishes a GitHub
-Release with the archives and `SHA256SUMS`.
-
-```text
-CI ARTIFACT
-!= GITHUB RELEASE
-
-ACCEPTED RELEASE COMMIT
-+ PUBLISH RELEASE WORKFLOW
-= TAG + GITHUB RELEASE + VERIFIED ASSETS
-```
-
-## v0.1.0 acceptance evidence
-
-Before the release gate was opened, the distribution foundation passed:
-
-- Product P0 validation on Ubuntu and macOS.
-- Four-platform archive build and SHA-256 verification.
-- Linux amd64 compiled-binary CI smoke testing.
-- Physical Ubuntu source-mode dogfood: 21 PASS / 0 FAIL.
-- Physical Ubuntu compiled-binary dogfood with Go hidden from runtime PATH: 16 PASS / 0 FAIL.
-
-After publication, the actual public release path was independently exercised on
-an independent Linux runtime host using the published `wsp_0.1.0_linux_amd64.tar.gz` and
-published `SHA256SUMS`, rather than a locally built or CI-only artifact.
-
-The external-install smoke verified:
-
-- GitHub Release asset download.
-- Published SHA-256 checksum verification.
-- Archive extraction and executable bit.
-- `VERSION: 0.1.0` identity with no `-dev` marker.
-- Runtime operation with Go hidden from `PATH` while Git remained available.
-- `wsp doctor`.
-- Clean Workspace bootstrap and logical Lens projection.
-- Git-root Workspace initialization, repository inspection, and logical Lens projection.
-- Git HEAD unchanged across WSP initialization/observation.
-
-Result:
-
-```text
-PUBLIC RELEASE SMOKE
-PASS=19
-FAIL=0
-STATUS: PASS
-```
-
-This evidence closes the `v0.1.0` public distribution path from accepted release
-commit through published GitHub Release artifact to a separate physical runtime
-host. It also demonstrates that Go is a build/source-mode dependency rather than
-a compiled WSP runtime dependency.
-
-## Release authority
-
-Release, tag, and public asset publication are authority-bearing mutations. They
-require an explicit Human release gate. The `v0.1.0` gate was explicitly opened
-before the release branch was prepared; the workflow does not independently
-choose a version or widen product scope.
-
-Historical validation evidence does not replace current Git, release, runtime,
-or Project authority.
+The builder checks clean Git state, exact toolchain and binary revision,
+and emits four archives with SHA256SUMS. A CI artifact is not a release.
+Publication requires an approved version transition.

@@ -1,4 +1,6 @@
-# wsp
+# Workspace Ops (wsp)
+
+[한국어](README.md) · [English](README.en.md)
 
 `wsp`는 로컬 개발 workspace를 관찰하고 해석하는 read-only semantic
 Product입니다. Git/filesystem fact와 명시적 relation을 하나의 semantic
@@ -22,10 +24,10 @@ GitHub Release에서 운영체제/아키텍처에 맞는 archive를 받아 `wsp`
 PATH에 두고 시작합니다.
 
 ```text
-wsp_0.7.1_linux_amd64.tar.gz
-wsp_0.7.1_linux_arm64.tar.gz
-wsp_0.7.1_darwin_amd64.tar.gz
-wsp_0.7.1_darwin_arm64.tar.gz
+wsp_<version>_linux_amd64.tar.gz
+wsp_<version>_linux_arm64.tar.gz
+wsp_<version>_darwin_amd64.tar.gz
+wsp_<version>_darwin_arm64.tar.gz
 SHA256SUMS
 ```
 
@@ -73,6 +75,8 @@ wsp lens tree [path] --axis logical|session [--json]
 wsp scanner scan <repository> --subject-id ID [--artifact snapshot|candidates|both] [--exclude-dir-name NAME ...]
 wsp scanner view --input FILE [--level L0|L1|L2|L3] [...]
 wsp scanner compare --baseline FILE --current FILE [--reference FILE]
+wsp manifest draft [repository] [--json] [--exclude-dir-name NAME ...]
+wsp manifest validate --input FILE [--json]
 wsp status [--json]
 wsp doctor
 wsp version
@@ -110,8 +114,7 @@ release pipeline은 Linux/macOS의 amd64/arm64 binary archive와 SHA-256 checksu
 
 front door는 source checkout에서 사용하는 얇은 POSIX shell이고 semantic
 동작은 standard-library-first Go core가 담당합니다. V0 지원 대상은
-macOS/Linux이며 Windows/PowerShell은 후속 gate입니다. 현재 public version은
-`0.7.1`입니다.
+macOS/Linux이며 Windows/PowerShell은 후속 gate입니다. 현재 공개 버전과 설치 자산은 [GitHub Releases](https://github.com/Sorune/wsp/releases)에서 확인할 수 있습니다.
 
 ```bash
 go test ./...
@@ -120,3 +123,5 @@ bash tests/conformance.sh
 ```
 
 Apache License 2.0.
+
+[Release history](docs/RELEASE_HISTORY.md)

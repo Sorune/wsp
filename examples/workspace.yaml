@@ -12,11 +12,11 @@ projects:
 repositories:
   - id: "repository:alpha-app"
     name: "Alpha App"
-    path: "/Users/example/Develope/alpha-app"
+    path: "../alpha-app"
     project: "project:alpha"
   - id: "repository:beta-app"
     name: "Beta App"
-    path: "/Users/example/Develope/beta-app"
+    path: "../beta-app"
     project: "project:beta"
 relations:
   - id: "rel:workspace-alpha"

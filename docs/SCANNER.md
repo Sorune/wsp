@@ -95,7 +95,7 @@ candidate derivation.
 
 pnpm `packages:` entries support literal paths and deterministic single-segment
 `*` globs matched against observed `package.json` directories.
-The v0.7.2 maintenance candidate also recognizes an observed root package and
+The Scanner also recognizes an observed root package and
 a strictly bounded, flat `allowBuilds:` map with simple unquoted package keys
 and literal boolean values. It does not derive execution permission or execute
 pnpm. Unsupported YAML structures, duplicate keys, dynamic or unsupported glob
@@ -107,19 +107,14 @@ matching manifest exists, preserving prior output for repositories without
 those formats.
 
 The public observation producer is `wsp-scanner`; the derived-candidate producer
-is `wsp-scanner-derivation`. Scanner `0.7.1` uses observation model `1` and
+is `wsp-scanner-derivation`. Scanner uses observation model `1` and
 derivation model `1`. Cross-version or incompatible producer/configuration
 comparison is not guaranteed and fails closed.
 The v0.7.0 release normalizes repository-root evidence and adds bounded Python, Gradle, TypeScript, deployment and lockfile observations; rebuild both
 comparison snapshots with the same released version and scan configuration.
 A candidate difference computed across producer versions is not source drift.
-The v0.7.1 release updates the build toolchain and CI dependencies without
-changing Scanner observation or derivation models. Re-scan both artifacts
-with v0.7.1 before comparing; an older producer version is not source drift.
-The v0.7.2 candidate retains both model versions, improves bounded pnpm
-observations, and indexes existing derivation lookups. Rescan both sides with
-the identical released producer and configuration before future comparisons.
-No v0.7.2 release is asserted here.
+Re-scan both artifacts with the same released producer and configuration before
+comparing. An older producer version is not source drift.
 
 Git repository-root evidence uses the subject-relative coordinate ".", not
 the local checkout directory. Identical paths relative to the subject,
