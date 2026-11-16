@@ -55,7 +55,7 @@ func TestScannerCLIEndToEnd(t *testing.T) {
 	}
 	snapshot := artifact["snapshot"].(map[string]any)
 	producer := snapshot["producer"].(map[string]any)
-	if producer["id"] != "wsp-scanner" || producer["version"] != "0.7.0" {
+	if producer["id"] != "wsp-scanner" || producer["version"] != "0.7.1" {
 		t.Fatalf("unexpected Scanner producer: %v", producer)
 	}
 	for _, key := range []string{"nodes", "edges", "evidence", "coverage", "unknowns", "diagnostics"} {

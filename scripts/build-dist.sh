@@ -7,6 +7,17 @@ cd "$ROOT"
 VERSION=${1:-$(cat VERSION)}
 OUT_DIR=${OUT_DIR:-dist}
 
+# Release toolchain is independent of the source language compatibility floor.
+# Check before creating or removing output and forbid automatic switching.
+GOTOOLCHAIN=local
+export GOTOOLCHAIN
+EXPECTED_GO="go$(cat .go-version)"
+ACTUAL_GO=$(go env GOVERSION)
+if [ "$ACTUAL_GO" != "$EXPECTED_GO" ]; then
+  printf 'release toolchain mismatch: expected %s, got %s\n' "$EXPECTED_GO" "$ACTUAL_GO" >&2
+  exit 2
+fi
+
 case "$VERSION" in
   ""|*[!A-Za-z0-9._-]*)
     printf 'invalid distribution version: %s\n' "$VERSION" >&2
@@ -26,6 +37,12 @@ build_one() {
   mkdir -p "$stage"
   CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
     go build -trimpath -o "$stage/wsp" ./cmd/wsp
+
+  binary_go=$(go version -m "$stage/wsp" | awk 'NR == 1 { print $NF }')
+  if [ "$binary_go" != "$EXPECTED_GO" ]; then
+    printf 'binary toolchain mismatch: %s: expected %s, got %s\n' "$name" "$EXPECTED_GO" "$binary_go" >&2
+    exit 2
+  fi
 
   cp LICENSE README.md "$stage/"
   tar -C "$OUT_DIR/stage" -czf "$OUT_DIR/$name.tar.gz" "$name"

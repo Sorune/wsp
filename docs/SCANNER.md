@@ -103,12 +103,15 @@ matching manifest exists, preserving prior output for repositories without
 those formats.
 
 The public observation producer is `wsp-scanner`; the derived-candidate producer
-is `wsp-scanner-derivation`. Scanner `0.7.0` uses observation model `1` and
+is `wsp-scanner-derivation`. Scanner `0.7.1` uses observation model `1` and
 derivation model `1`. Cross-version or incompatible producer/configuration
 comparison is not guaranteed and fails closed.
 The v0.7.0 release normalizes repository-root evidence and adds bounded Python, Gradle, TypeScript, deployment and lockfile observations; rebuild both
 comparison snapshots with the same released version and scan configuration.
 A candidate difference computed across producer versions is not source drift.
+The v0.7.1 release updates the build toolchain and CI dependencies without
+changing Scanner observation or derivation models. Re-scan both artifacts
+with v0.7.1 before comparing; an older producer version is not source drift.
 
 Git repository-root evidence uses the subject-relative coordinate ".", not
 the local checkout directory. Identical paths relative to the subject,

@@ -7,19 +7,25 @@ on:
 permissions:
   contents: read
 
+env:
+  GOTOOLCHAIN: local
+
 jobs:
   dist:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version-file: .go-version
+          cache-dependency-path: go.mod
+      - name: Verify exact Go toolchain
+        run: test "$(go env GOVERSION)" = "go$(cat .go-version)"
       - name: Build distribution candidates
         run: |
           chmod +x scripts/build-dist.sh
@@ -37,7 +43,7 @@ jobs:
           "/tmp/wsp-dist-smoke/wsp_${version}_linux_amd64/wsp" version
           "/tmp/wsp-dist-smoke/wsp_${version}_linux_amd64/wsp" doctor
       - name: Upload distribution candidates
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wsp-dist-candidate
           path: |

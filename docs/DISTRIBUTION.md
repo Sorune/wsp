@@ -1,6 +1,6 @@
 # WSP distribution boundary
 
-Status: `v0.7.0` public feature release line, using the validated Human-gated distribution path.
+Status: `v0.7.1` public stabilization release line, using the validated Human-gated distribution path.
 
 ## Runtime model
 
@@ -19,6 +19,17 @@ COMPILED WSP BINARY
 Go
 = build/source-mode dependency
 ```
+
+## Build toolchain policy
+
+The Go language/source compatibility floor remains 1.21 in go.mod; this is
+not a recommendation to run an unsupported Go installation. Use a supported
+Go toolchain for source development. The release and distribution build
+toolchain is pinned separately in .go-version (currently 1.27.4). All CI
+workflows select this exact version with GOTOOLCHAIN=local; the distribution
+builder refuses a different toolchain before writing output and verifies the
+embedded Go version in each binary. CI action references are fixed to full
+upstream release commit SHAs. No third-party Go modules are required.
 
 ## Release artifacts
 

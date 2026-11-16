@@ -22,10 +22,10 @@ GitHub Release에서 운영체제/아키텍처에 맞는 archive를 받아 `wsp`
 PATH에 두고 시작합니다.
 
 ```text
-wsp_0.7.0_linux_amd64.tar.gz
-wsp_0.7.0_linux_arm64.tar.gz
-wsp_0.7.0_darwin_amd64.tar.gz
-wsp_0.7.0_darwin_arm64.tar.gz
+wsp_0.7.1_linux_amd64.tar.gz
+wsp_0.7.1_linux_arm64.tar.gz
+wsp_0.7.1_darwin_amd64.tar.gz
+wsp_0.7.1_darwin_arm64.tar.gz
 SHA256SUMS
 ```
 
@@ -45,9 +45,10 @@ wsp lens tree /path/to/existing/workspace --axis logical --json
 wsp repo inspect /path/to/repository
 ```
 
-source checkout으로 개발하거나 release binary 없이 실행할 때는 Go 1.21+가
-필요하며, WSP source checkout은 관찰 대상 workspace와 분리해 두는 것을
-권장합니다.
+source checkout의 Go 언어 호환 기준은 1.21이며, 개발에는 보안 지원 중인
+Go 버전을 사용합니다. 배포 빌드 및 CI는 .go-version에 명시된 정확한
+Go Toolchain(현재 1.27.4)을 사용합니다. WSP source checkout은 관찰 대상
+workspace와 분리해 두는 것을 권장합니다.
 
 `wsp init [path]`는 지정한 path를 명시적 Workspace Root로 선택합니다.
 경로가 없으면 새 directory와 Product-owned `.wsp/workspace.yaml`을 만들고,
@@ -110,7 +111,7 @@ release pipeline은 Linux/macOS의 amd64/arm64 binary archive와 SHA-256 checksu
 front door는 source checkout에서 사용하는 얇은 POSIX shell이고 semantic
 동작은 standard-library-first Go core가 담당합니다. V0 지원 대상은
 macOS/Linux이며 Windows/PowerShell은 후속 gate입니다. 현재 public version은
-`0.7.0`입니다.
+`0.7.1`입니다.
 
 ```bash
 go test ./...
