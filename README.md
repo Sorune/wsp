@@ -22,10 +22,10 @@ GitHub Release에서 운영체제/아키텍처에 맞는 archive를 받아 `wsp`
 PATH에 두고 시작합니다.
 
 ```text
-wsp_0.6.0_linux_amd64.tar.gz
-wsp_0.6.0_linux_arm64.tar.gz
-wsp_0.6.0_darwin_amd64.tar.gz
-wsp_0.6.0_darwin_arm64.tar.gz
+wsp_0.7.0_linux_amd64.tar.gz
+wsp_0.7.0_linux_arm64.tar.gz
+wsp_0.7.0_darwin_amd64.tar.gz
+wsp_0.7.0_darwin_arm64.tar.gz
 SHA256SUMS
 ```
 
@@ -110,7 +110,7 @@ release pipeline은 Linux/macOS의 amd64/arm64 binary archive와 SHA-256 checksu
 front door는 source checkout에서 사용하는 얇은 POSIX shell이고 semantic
 동작은 standard-library-first Go core가 담당합니다. V0 지원 대상은
 macOS/Linux이며 Windows/PowerShell은 후속 gate입니다. 현재 public version은
-`0.6.0`입니다.
+`0.7.0`입니다.
 
 ```bash
 go test ./...

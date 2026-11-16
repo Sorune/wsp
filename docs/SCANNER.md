@@ -103,12 +103,58 @@ matching manifest exists, preserving prior output for repositories without
 those formats.
 
 The public observation producer is `wsp-scanner`; the derived-candidate producer
-is `wsp-scanner-derivation`. Scanner `0.6.0` uses observation model `1` and
+is `wsp-scanner-derivation`. Scanner `0.7.0` uses observation model `1` and
 derivation model `1`. Cross-version or incompatible producer/configuration
 comparison is not guaranteed and fails closed.
-The v0.6.0 release adds static-manifest candidate signals; rebuild both
+The v0.7.0 release normalizes repository-root evidence and adds bounded Python, Gradle, TypeScript, deployment and lockfile observations; rebuild both
 comparison snapshots with the same released version and scan configuration.
 A candidate difference computed across producer versions is not source drift.
+
+Git repository-root evidence uses the subject-relative coordinate ".", not
+the local checkout directory. Identical paths relative to the subject,
+content, Git facts and configuration therefore do not differ merely because
+a checkout was relocated. Runtime path context is not an artifact identity.
+
+Auxiliary declaration observation covers literal Python requirements files,
+allowlisted Gradle properties and wrapper settings, bounded Gradle version
+catalog aliases, and TypeScript/JavaScript config JSON or JSONC. Each matching
+family reports PARTIAL (python_requirements, gradle_configuration,
+gradle_catalog, typescript_configs). Requirements options, includes,
+constraints, continuations, markers and direct references are not resolved.
+setup.py and setup.cfg remain unparsed; a filename does not establish a Python
+project. Gradle properties expose only approved literal options and a
+standard public wrapper distribution version/type; arbitrary property values,
+JVM arguments and custom URLs are not projected. Catalog versions, simple
+library/plugin aliases and bundles are declarations only; alias resolution
+and effective build configuration remain out of scope. TypeScript observes
+literal extends/references, file selections and selected compiler options;
+duplicate keys, unsafe paths, unsupported options, effective inheritance and
+path mapping resolution remain UNKNOWN or unobserved. These auxiliary nodes
+do not establish project boundaries, inferred dependencies or semantic edges.
+
+Known unparsed manifest filenames are reported as unsupported_manifest
+UNKNOWNs and UNSUPPORTED coverage. The bounded list includes setup scripts,
+alternate workspace manifest names and selected other build-system manifests.
+Recognition does not parse contents, execute tools, expose values or create
+Project/package identities. Excluded directories remain opaque. Deployment and lockfile declarations are separate PARTIAL observations,
+not a resolved runtime graph. Dockerfile/Containerfile reads literal FROM
+and named stage declarations only, without evaluating platform expressions,
+build instructions, heredocs or alternate escapes. Compose recognizes bounded
+literal block-mapping service declarations and optionally literal image
+names; it does not interpret YAML aliases, merges, interpolation, effective
+configuration, ports, volumes, environment values or build context. Ambiguous
+lexical contexts are UNKNOWN rather than parsed as full YAML.
+
+Lockfiles support npm lock versions 2/3, single-document pnpm v9 package
+keys, Cargo lock v3/4 package records, and Go checksum records (not a Go
+dependency lock). Known other lockfile names report UNSUPPORTED. Each
+recognized lockfile records its format, count of literal declarations and
+uninterpreted entries; at most 128 stable, sorted entry nodes per file are
+returned with explicit omitted counts and UNKNOWN for truncation. Versions
+are declared literals, not verified installations, and registry URLs,
+authentication data, integrity/checksum strings, and resolved dependency
+edges are not projected. No Docker or package-manager processes are invoked. NOT_APPLICABLE means no listed unsupported
+manifest was observed in scope, not universal format support.
 
 Raw artifacts retain full evidence. They are not intended to be inserted
 wholesale into an AI context.

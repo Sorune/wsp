@@ -11,6 +11,32 @@ import (
 	"strings"
 )
 
+// Bounded recognition by filename, not a parser or a universal inventory.
+func unsupportedManifestReason(rel string) string {
+	name := path.Base(rel)
+	if otherLockManifest(name) {
+		return "lockfile_format_not_supported"
+	}
+	switch name {
+	case "setup.py", "setup.cfg", "Pipfile", "environment.yml", "environment.yaml":
+		return "python_declaration_not_supported"
+	case "pnpm-workspace.yml":
+		return "workspace_manifest_not_supported"
+	case "build.xml", "build.sbt", "Makefile", "CMakeLists.txt", "meson.build",
+		"Gemfile", "composer.json", "mix.exs", "pubspec.yaml", "Package.swift",
+		"deno.json", "deno.jsonc", "WORKSPACE", "WORKSPACE.bazel", "MODULE.bazel",
+		"BUILD.bazel", "vcpkg.json", "conanfile.txt", "conanfile.py",
+		"project.clj", "deps.edn", "stack.yaml", "cabal.project",
+		"Directory.Build.props", "Directory.Packages.props", "global.json":
+		return "build_manifest_not_supported"
+	}
+	switch path.Ext(name) {
+	case ".csproj", ".fsproj", ".vbproj", ".cabal":
+		return "build_manifest_not_supported"
+	}
+	return ""
+}
+
 func observeManifests(s Subject, b *ObservationBatch, files map[string]observedFile) {
 	for _, cap := range []string{"go_manifests", "go_package_clauses", "go_workspaces", "npm_manifests", "npm_workspaces", "pnpm_workspaces", "unsupported_manifest"} {
 		setCoverage(b, cap, "NOT_APPLICABLE")
@@ -20,6 +46,74 @@ func observeManifests(s Subject, b *ObservationBatch, files map[string]observedF
 	goModSeen, npmSeen, goWorkSeen, goSourceSeen, npmWorkspaceSeen, pnpmWorkspaceSeen := false, false, false, false, false, false
 	gradleSeen, mavenSeen, cargoSeen, pythonSeen := false, false, false, false
 	for rel, f := range files {
+		name := path.Base(rel)
+		if deploymentManifest(name) {
+			cap, kind := deploymentCapability(name)
+			setCoverage(b, cap, "PARTIAL")
+			if f.data == nil {
+				auxiliaryUnknown(s, b, rel, kind, "manifest_content_unavailable", 0)
+				continue
+			}
+			if dockerfileName(name) {
+				observeDockerfile(s, b, rel, string(f.data))
+			} else {
+				observeCompose(s, b, rel, string(f.data))
+			}
+			continue
+		}
+		if lockManifest(name) {
+			setCoverage(b, "lockfiles", "PARTIAL")
+			if f.data == nil {
+				auxiliaryUnknown(s, b, rel, "lockfile", "manifest_content_unavailable", 0)
+				continue
+			}
+			switch name {
+			case "package-lock.json", "npm-shrinkwrap.json":
+				observeNPMLock(s, b, rel, f.data)
+			case "pnpm-lock.yaml":
+				observePNPMLock(s, b, rel, string(f.data))
+			case "Cargo.lock":
+				observeCargoLock(s, b, rel, string(f.data))
+			case "go.sum":
+				observeGoSum(s, b, rel, string(f.data))
+			}
+			continue
+		}
+		if auxiliaryManifest(name) {
+			cap, kind := "", ""
+			switch {
+			case requirementsName(name):
+				cap, kind = "python_requirements", "python_requirements"
+			case catalogName(name):
+				cap, kind = "gradle_catalog", "gradle_catalog"
+			case tsconfigName(name):
+				cap, kind = "typescript_configs", "typescript_config"
+			default:
+				cap, kind = "gradle_configuration", "gradle_configuration"
+			}
+			setCoverage(b, cap, "PARTIAL")
+			if f.data == nil {
+				auxiliaryUnknown(s, b, rel, kind, "manifest_content_unavailable", 0)
+				continue
+			}
+			switch cap {
+			case "python_requirements":
+				observeRequirements(s, b, rel, string(f.data))
+			case "gradle_catalog":
+				observeGradleCatalog(s, b, rel, string(f.data))
+			case "typescript_configs":
+				observeTypeScriptConfig(s, b, rel, f.data)
+			default:
+				observeGradleProperties(s, b, rel, string(f.data))
+			}
+			continue
+		}
+		if reason := unsupportedManifestReason(rel); reason != "" {
+			// Never parse or disclose unsupported file contents.
+			ref := evidence(b, "unsupported_manifest", rel, 0, 0, reason)
+			unknown(b, s.ID, "unsupported_manifest", rel, reason, ref)
+			continue
+		}
 		switch filepath.Base(rel) {
 		case "go.mod":
 			goModSeen = true

@@ -71,6 +71,9 @@ func setCoverage(b *ObservationBatch, cap, state string) {
 	b.Coverage = append(b.Coverage, Coverage{Capability: cap, State: state})
 }
 func isManifestName(n string) bool {
+	if auxiliaryManifest(n) || deploymentManifest(n) || lockManifest(n) {
+		return true
+	}
 	switch n {
 	case "go.mod", "go.work", "package.json", "pnpm-workspace.yaml", "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "Cargo.toml", "pyproject.toml":
 		return true
@@ -307,7 +310,7 @@ func observeGit(b *ObservationBatch, files map[string]observedFile, excluded map
 	}
 	ref := evidence(b, "git_fact", ".", 0, 0, "repository")
 	setCoverage(b, "git_metadata", "NOT_APPLICABLE")
-	evidence(b, "git_fact", root, 0, 0, "repository_root")
+	evidence(b, "git_fact", ".", 0, 0, "repository_root")
 	b.Nodes = append(b.Nodes, Node{ID: NodeID(b.Subject.ID, "git.repository", "."), Kind: "git.repository", Coordinate: ".", Name: "repository", Attributes: map[string]string{}, EvidenceRefs: []string{ref}})
 	evidence(b, "git_fact", ".", 0, 0, "revision:"+b.Subject.Revision)
 	evidence(b, "git_fact", ".", 0, 0, "branch:"+b.Subject.Branch)
