@@ -1,6 +1,6 @@
 # Release history
 
-Workspace Ops (wsp) — original repository created on 2026-09-05.
+Workspace Ops (wsp) — original repository created on 2026-09-05. The original GitHub repository has been replaced for publication hygiene. The new repository and restored release records have new GitHub-generated dates; the historical dates below are retained as historical evidence, not as the new record dates.
 The table records the initial GitHub publication timestamps (UTC).
 
 | Release | Original publication (UTC) |
@@ -28,3 +28,5 @@ tags now identify the consolidated source snapshots. This is intentionally
 not a claim of byte-for-byte reproducibility from the consolidated tags.
 New releases are built from their corresponding release source commit and
 carry verified build provenance.
+
+The [original publication snapshot](PUBLICATION_SNAPSHOT.json) records the original repository creation timestamp, initial Git commit, original release IDs and publication times, and SHA-256 digests of the published assets. The original API responses and assets are retained privately. This is an archived observation, not a GitHub-issued attestation for the replacement repository.

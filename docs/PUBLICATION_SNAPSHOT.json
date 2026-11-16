@@ -1,0 +1,379 @@
+{
+  "schema": "wsp.original-publication-snapshot.v1",
+  "captured_at": "2026-11-16T04:59:59+00:00",
+  "source": "GitHub REST API repository and releases records captured before repository replacement; timestamps below are historical observations, not recreated GitHub dates.",
+  "repository": {
+    "full_name": "Sorune/wsp",
+    "id": 1357868152,
+    "created_at": "2026-09-05T05:49:01Z",
+    "original_initial_commit": "b8b78acc11f7b41d158c5e7bf6c7b438f2a40ea9",
+    "initial_commit_author_date": "2026-09-05T14:50:11+09:00",
+    "initial_commit_committer_date": "2026-09-05T14:50:11+09:00"
+  },
+  "releases": [
+    {
+      "tag": "v0.1.0",
+      "original_release_id": 388834529,
+      "original_created_at": "2026-09-15T02:45:03Z",
+      "original_published_at": "2026-09-15T02:45:07Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "a73af0c8eb589c917d5cf934d13ea3886657d685ae3d718752392276534659a1"
+        },
+        {
+          "name": "wsp_0.1.0_darwin_amd64.tar.gz",
+          "size": 1601411,
+          "sha256": "f79a07af36101a9f8f7f8a46a96a6e8ab8b08366578008db05432be994110731"
+        },
+        {
+          "name": "wsp_0.1.0_darwin_arm64.tar.gz",
+          "size": 1550831,
+          "sha256": "ef7c9b97b44dca5b71a048182054076937a641a1ca700bde834a1902dc17ff46"
+        },
+        {
+          "name": "wsp_0.1.0_linux_amd64.tar.gz",
+          "size": 1656180,
+          "sha256": "032345b0f1bb51f1838dfe44fe6ee81412eb31b05c68c630873824408b0c8737"
+        },
+        {
+          "name": "wsp_0.1.0_linux_arm64.tar.gz",
+          "size": 1562917,
+          "sha256": "10d9405064163b94749db3215b6960c3473f98e60cec4f7726ef8cbfa9748ce8"
+        }
+      ]
+    },
+    {
+      "tag": "v0.1.1",
+      "original_release_id": 406558372,
+      "original_created_at": "2026-10-08T07:45:25Z",
+      "original_published_at": "2026-10-08T07:45:28Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "b734544acce5947f7a2bcee29afac064b2737288ac8ceb661450ee19c476eea1"
+        },
+        {
+          "name": "wsp_0.1.1_darwin_amd64.tar.gz",
+          "size": 1602733,
+          "sha256": "6f75b66cb67c8019e9cbec1cdcf6213a85ad6e78b7c46cbfa1a04fdc38fb503e"
+        },
+        {
+          "name": "wsp_0.1.1_darwin_arm64.tar.gz",
+          "size": 1552546,
+          "sha256": "855f36ba298a38d35a963d94682f6dbdcce74e59f08bdead485e5035e191b516"
+        },
+        {
+          "name": "wsp_0.1.1_linux_amd64.tar.gz",
+          "size": 1656340,
+          "sha256": "6568ce587deb0cd392efc7f73360fa4b3ac9957a7eaaf2b0fb9115e4e6bcd689"
+        },
+        {
+          "name": "wsp_0.1.1_linux_arm64.tar.gz",
+          "size": 1563459,
+          "sha256": "f66ae29b16df86107e86dd09e28925d04be85f6c90a54111c848aec1b66f72fd"
+        }
+      ]
+    },
+    {
+      "tag": "v0.2.0",
+      "original_release_id": 407736480,
+      "original_created_at": "2026-10-09T09:00:08Z",
+      "original_published_at": "2026-10-09T09:00:13Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "d75ef67e3675a06e88f970f8c267e67de780a9b919f6140ee06e892d20feff52"
+        },
+        {
+          "name": "wsp_0.2.0_darwin_amd64.tar.gz",
+          "size": 2266219,
+          "sha256": "87898529139637e1295a556b9a9ee493d2615d663741fa997d63021e5f6732f0"
+        },
+        {
+          "name": "wsp_0.2.0_darwin_arm64.tar.gz",
+          "size": 2177089,
+          "sha256": "3b77ff2e8424f69dd4849cbc3556fd223770d13a65b6ebc469fc44212175fbb4"
+        },
+        {
+          "name": "wsp_0.2.0_linux_amd64.tar.gz",
+          "size": 2330423,
+          "sha256": "ab7a7d7b8ee1ec6b641ef1ddd6189c243f6134238f3e645e4cc34d0fa85730e9"
+        },
+        {
+          "name": "wsp_0.2.0_linux_arm64.tar.gz",
+          "size": 2183148,
+          "sha256": "82eadf7abeba6f5ceacee26a030b479d18b93fbd0f5bc0b6ad2a54e99a034e43"
+        }
+      ]
+    },
+    {
+      "tag": "v0.3.0",
+      "original_release_id": 443886399,
+      "original_created_at": "2026-11-13T06:23:14Z",
+      "original_published_at": "2026-11-13T06:23:18Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "b3f71a427b6f11fdc9952bf49345bec47b8ce180361a3e86ea40db1377d765f6"
+        },
+        {
+          "name": "wsp_0.3.0_darwin_amd64.tar.gz",
+          "size": 2304575,
+          "sha256": "756a2218196ccbe6a36bb2f86e7c3abe2bc4129b7ab1bc23479a6d6748e179bc"
+        },
+        {
+          "name": "wsp_0.3.0_darwin_arm64.tar.gz",
+          "size": 2215945,
+          "sha256": "4adb52327224f5761f1bc144c8361ec9c0fa307ea8d7f2d7a7917b50048301a3"
+        },
+        {
+          "name": "wsp_0.3.0_linux_amd64.tar.gz",
+          "size": 2371485,
+          "sha256": "f5881f4e7f612505bf92e93e4023f757561dbfba7a05de9ff64bc8c071e78431"
+        },
+        {
+          "name": "wsp_0.3.0_linux_arm64.tar.gz",
+          "size": 2220311,
+          "sha256": "b6d84aefbf789776b277ad7dda860202176455d7174a22c0484913bbcb8f147d"
+        }
+      ]
+    },
+    {
+      "tag": "v0.4.0",
+      "original_release_id": 443961694,
+      "original_created_at": "2026-11-13T08:02:40Z",
+      "original_published_at": "2026-11-13T08:02:43Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "f478399d57459bae5066309a9dc1d678103d4f8cb34fc842e7225f2c85d6815e"
+        },
+        {
+          "name": "wsp_0.4.0_darwin_amd64.tar.gz",
+          "size": 2314629,
+          "sha256": "93bd11ab0e8524337483eba0ed5b85d77dac2c2a026ba4e0762d769e28ce6d2e"
+        },
+        {
+          "name": "wsp_0.4.0_darwin_arm64.tar.gz",
+          "size": 2223194,
+          "sha256": "5f7d3c0996dc913a282089538d7e46b4ad8556343f9c31aed44ceb6e2cc22124"
+        },
+        {
+          "name": "wsp_0.4.0_linux_amd64.tar.gz",
+          "size": 2379927,
+          "sha256": "f8fe0c1a051ddd392dd8fe4e15ef2c73d56e3f9ed3f72def92e519c57949877b"
+        },
+        {
+          "name": "wsp_0.4.0_linux_arm64.tar.gz",
+          "size": 2227237,
+          "sha256": "918ebbc8b91815c118b2a04cb1f6a7a34a937fba6be9b70022f89e39749452b5"
+        }
+      ]
+    },
+    {
+      "tag": "v0.5.0",
+      "original_release_id": 445641898,
+      "original_created_at": "2026-11-14T22:44:56Z",
+      "original_published_at": "2026-11-14T22:44:59Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "335e413543320f3c6d93bf3e63deba54e6d95d3dfc9805d08c8f76f790cbeee7"
+        },
+        {
+          "name": "wsp_0.5.0_darwin_amd64.tar.gz",
+          "size": 2629492,
+          "sha256": "c6f927221aa76acf46a4cc74cc5de99ed619d56e6ca926bcf8d77b3538a5233c"
+        },
+        {
+          "name": "wsp_0.5.0_darwin_arm64.tar.gz",
+          "size": 2521940,
+          "sha256": "ebb9133ae5658c365e7f0fbc279d2155d8fa8eead16e437fbc25e527c049c196"
+        },
+        {
+          "name": "wsp_0.5.0_linux_amd64.tar.gz",
+          "size": 2699125,
+          "sha256": "8e53edf51d4defbbc81c731acf50fa112cb2bcea11f720482ec4e24a5aeeeea7"
+        },
+        {
+          "name": "wsp_0.5.0_linux_arm64.tar.gz",
+          "size": 2524031,
+          "sha256": "a8191a6b22aa7f3af6af62bfbf95895c7f58900848b7dce45dab0d3bfb182226"
+        }
+      ]
+    },
+    {
+      "tag": "v0.6.0",
+      "original_release_id": 445823302,
+      "original_created_at": "2026-11-15T05:03:40Z",
+      "original_published_at": "2026-11-15T05:03:44Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "4336fad95c9c7c151486fccacc4fc0397a2c9fc392019d72439f1e9167420f81"
+        },
+        {
+          "name": "wsp_0.6.0_darwin_amd64.tar.gz",
+          "size": 2638938,
+          "sha256": "fe0539322a4a2b3a9770aa0878fc7d21b22a926abe37656a8bec9a3ff8194a9f"
+        },
+        {
+          "name": "wsp_0.6.0_darwin_arm64.tar.gz",
+          "size": 2532183,
+          "sha256": "3ff00fa6d7dbaf1cc6d5bdf314024c372f663ce916364a8140c5b17dbbb9abb3"
+        },
+        {
+          "name": "wsp_0.6.0_linux_amd64.tar.gz",
+          "size": 2710143,
+          "sha256": "520ee2ce6a0f6eccdc0c7ffeb4fe86586d9b9d202255ccf0c5d5a930d04d53c1"
+        },
+        {
+          "name": "wsp_0.6.0_linux_arm64.tar.gz",
+          "size": 2533626,
+          "sha256": "cf07d4a7c6837299f12eafdf4b3e962a6cee30e490ad08b903caf346c232759a"
+        }
+      ]
+    },
+    {
+      "tag": "v0.7.0",
+      "original_release_id": 446468502,
+      "original_created_at": "2026-11-16T00:09:53Z",
+      "original_published_at": "2026-11-16T00:09:56Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "053e5f1867c42dfd1ab8587fd03ef250f46f0b73ea516bb039afb0975155ee0e"
+        },
+        {
+          "name": "wsp_0.7.0_darwin_amd64.tar.gz",
+          "size": 2724685,
+          "sha256": "7a0e984463b628ef6ceb205101e18c348e659b18eda83a73d3b5e89602c54e3f"
+        },
+        {
+          "name": "wsp_0.7.0_darwin_arm64.tar.gz",
+          "size": 2616725,
+          "sha256": "dc6e0c9f9a4abcd85c5fb8335acfba7eb5523cdd486cd70162d45676fa8e5818"
+        },
+        {
+          "name": "wsp_0.7.0_linux_amd64.tar.gz",
+          "size": 2797577,
+          "sha256": "b2bec352913f90daf81bb2d76dbba793b5864f0e9bdadd94a239dbc9c26e664d"
+        },
+        {
+          "name": "wsp_0.7.0_linux_arm64.tar.gz",
+          "size": 2617425,
+          "sha256": "4c0ce9fa671b2f106715f6cc5e7d8ee246de530f0bf24d86298f3c078af4dbd9"
+        }
+      ]
+    },
+    {
+      "tag": "v0.7.1",
+      "original_release_id": 446482330,
+      "original_created_at": "2026-11-16T00:36:36Z",
+      "original_published_at": "2026-11-16T00:36:40Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "5e9f5967705a9415a764c39ed73516698eda8f19c2dc70e0948b31e63c4217e2"
+        },
+        {
+          "name": "wsp_0.7.1_darwin_amd64.tar.gz",
+          "size": 3760697,
+          "sha256": "ca9d72e9a31a31adf284ef3c1c44714cc933ebd68e7995b8354d4263485bc37a"
+        },
+        {
+          "name": "wsp_0.7.1_darwin_arm64.tar.gz",
+          "size": 3507286,
+          "sha256": "c35ef1b5741ef911ce8830d724978c3606a0b6d8dfd1eb24ccb1d31c32ba62d1"
+        },
+        {
+          "name": "wsp_0.7.1_linux_amd64.tar.gz",
+          "size": 3764339,
+          "sha256": "94b59f8b1d1a33a221cfd5c9086fd506ccb5142859cd4f590d094cefb222a003"
+        },
+        {
+          "name": "wsp_0.7.1_linux_arm64.tar.gz",
+          "size": 3425362,
+          "sha256": "99af8e45bcf5e8ce090f743d17508d3eef56c9655339829ec4c83486d077133f"
+        }
+      ]
+    },
+    {
+      "tag": "v0.7.2",
+      "original_release_id": 446593954,
+      "original_created_at": "2026-11-16T04:04:41Z",
+      "original_published_at": "2026-11-16T04:04:45Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "a97fce9a7ed8015afed31d6c312199c0ebc8d082221f04db2ce6231276885a79"
+        },
+        {
+          "name": "wsp_0.7.2_darwin_amd64.tar.gz",
+          "size": 3765365,
+          "sha256": "ee02f2b881be5f699906d263f3037ac307335bc60d2044c67771255a050a419d"
+        },
+        {
+          "name": "wsp_0.7.2_darwin_arm64.tar.gz",
+          "size": 3511565,
+          "sha256": "5b24c77d5c35f5da45a850a1140b982acbdccc5df256a11e390e5b9a85ca7f70"
+        },
+        {
+          "name": "wsp_0.7.2_linux_amd64.tar.gz",
+          "size": 3766402,
+          "sha256": "0db53109b6fc3efb0ce6970bc9a08b84e44e899e3a2a5a3fbb2b5829a2fc0484"
+        },
+        {
+          "name": "wsp_0.7.2_linux_arm64.tar.gz",
+          "size": 3429613,
+          "sha256": "e8316cfdae22e3f64f3016772b4963a2c84850fb961a78fb1bc1196f97724c28"
+        }
+      ]
+    },
+    {
+      "tag": "v0.7.3",
+      "original_release_id": 446614055,
+      "original_created_at": "2026-11-16T04:41:54Z",
+      "original_published_at": "2026-11-16T04:41:57Z",
+      "assets": [
+        {
+          "name": "SHA256SUMS",
+          "size": 390,
+          "sha256": "b7821cbc58fdb23c5e624a22a29ebbfffb45b9d6f5a449aef1471d66e87bffc0"
+        },
+        {
+          "name": "wsp_0.7.3_darwin_amd64.tar.gz",
+          "size": 3765785,
+          "sha256": "e2e1e4d0b8994561e26ab909f8cc80c91401b5335d5ddc5b8213219e4f8276e9"
+        },
+        {
+          "name": "wsp_0.7.3_darwin_arm64.tar.gz",
+          "size": 3517628,
+          "sha256": "9a3056aa1467c84b1a27d265ada59a71fd62983938cd09ac18a8f6907994bb8f"
+        },
+        {
+          "name": "wsp_0.7.3_linux_amd64.tar.gz",
+          "size": 3769528,
+          "sha256": "b255c47d6252900771eb3410384c8f833345d405ef004e921cd78b4e08041377"
+        },
+        {
+          "name": "wsp_0.7.3_linux_arm64.tar.gz",
+          "size": 3430996,
+          "sha256": "7900142f396240fbff53a140ac173e3e799dee56bb4a054eef05a6bb7c3df357"
+        }
+      ]
+    }
+  ],
+  "original_ci_run_count": 155
+}
