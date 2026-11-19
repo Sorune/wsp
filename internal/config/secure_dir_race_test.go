@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestPinnedManifestDirectorySurvivesLinkSwapWithoutRedirection(t *testing.T) {
+func TestPinnedManifestDirectoryRejectsDetachedSourceAfterSwap(t *testing.T) {
 	base := t.TempDir()
 	root := filepath.Join(base, "root")
 	foreign := filepath.Join(base, "foreign")
@@ -37,12 +37,11 @@ func TestPinnedManifestDirectorySurvivesLinkSwapWithoutRedirection(t *testing.T)
 		t.Fatal(err)
 	}
 	body := []byte("schema_version: 1\nworkspace_id: \"workspace:pinned\"\nrepositories: []\nrelations: []\n")
-	if err := dir.create(manifestFilename, body, 0600); err != nil {
-		t.Fatal(err)
+	if err := dir.create(manifestFilename, body, 0600); err == nil {
+		t.Fatal("detached .wsp directory must refuse new writes")
 	}
-	actual, err := os.ReadFile(filepath.Join(parked, manifestFilename))
-	if err != nil || string(actual) != string(body) {
-		t.Fatalf("pinned directory was not used: %q %v", actual, err)
+	if _, err := os.Lstat(filepath.Join(parked, manifestFilename)); !os.IsNotExist(err) {
+		t.Fatalf("detached directory unexpectedly modified: %v", err)
 	}
 	foreignData, err := os.ReadFile(filepath.Join(foreign, manifestFilename))
 	if err != nil || string(foreignData) != "FOREIGN" {
@@ -50,7 +49,7 @@ func TestPinnedManifestDirectorySurvivesLinkSwapWithoutRedirection(t *testing.T)
 	}
 }
 
-func TestPinnedManifestReplacementIgnoresChangedDirectoryEntry(t *testing.T) {
+func TestPinnedManifestReplacementRejectsDetachedSourceAfterSwap(t *testing.T) {
 	base := t.TempDir()
 	root := filepath.Join(base, "root")
 	parked := filepath.Join(base, "parked")
@@ -91,12 +90,12 @@ func TestPinnedManifestReplacementIgnoresChangedDirectoryEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	changed := []byte("schema_version: 1\nworkspace_id: \"workspace:new\"\nrepositories: []\nrelations: []\n")
-	if err := dir.replace(manifestFilename, changed, oldInfo); err != nil {
-		t.Fatal(err)
+	if err := dir.replace(manifestFilename, changed, oldInfo, old); err == nil {
+		t.Fatal("detached .wsp directory must refuse replacement")
 	}
 	got, err := os.ReadFile(filepath.Join(parked, manifestFilename))
-	if err != nil || string(got) != string(changed) {
-		t.Fatalf("replacement not pinned: %q %v", got, err)
+	if err != nil || string(got) != string(old) {
+		t.Fatalf("detached original directory was changed: %q %v", got, err)
 	}
 	got, err = os.ReadFile(filepath.Join(foreign, manifestFilename))
 	if err != nil || string(got) != "FOREIGN" {

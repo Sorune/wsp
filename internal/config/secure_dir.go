@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -12,10 +13,62 @@ import (
 
 const manifestFilename = "workspace.yaml"
 
-type manifestDir struct{ file *os.File }
+type manifestDir struct {
+	file     *os.File // physical .wsp directory descriptor
+	root     *os.File // selected root directory descriptor
+	rootPath string   // user-selected path, for detachment detection
+}
 
-func (d *manifestDir) close() error { return d.file.Close() }
-func (d *manifestDir) fd() int      { return int(d.file.Fd()) }
+func (d *manifestDir) close() error {
+	dirErr := d.file.Close()
+	rootErr := d.root.Close()
+	if dirErr != nil {
+		return dirErr
+	}
+	return rootErr
+}
+func (d *manifestDir) fd() int { return int(d.file.Fd()) }
+
+// ensureAttached checks both the selected Workspace root and its .wsp child.
+// A pinned FD cannot redirect through a replacement symlink, but without
+// this check the old, detached directory could still be modified silently.
+// These checks are not a filesystem transaction against an adversary who
+// can rename paths between this test and the following I/O.
+func (d *manifestDir) ensureAttached() error {
+	expectedRoot, err := d.root.Stat()
+	if err != nil {
+		return fmt.Errorf("INVALID_CONFIGURATION: workspace root descriptor: %w", err)
+	}
+	selectedRoot, err := os.Stat(d.rootPath)
+	if err != nil {
+		return fmt.Errorf("INVALID_CONFIGURATION: workspace root detached: %w", err)
+	}
+	if !os.SameFile(expectedRoot, selectedRoot) {
+		return fmt.Errorf("INVALID_CONFIGURATION: selected workspace root changed during mutation")
+	}
+	fd, err := atOpen(int(d.root.Fd()), ".wsp", syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return fmt.Errorf("INVALID_CONFIGURATION: physical .wsp directory detached: %w", err)
+	}
+	current := os.NewFile(uintptr(fd), ".wsp attachment check")
+	if current == nil {
+		syscall.Close(fd)
+		return fmt.Errorf("INVALID_CONFIGURATION: cannot verify .wsp attachment")
+	}
+	defer current.Close()
+	original, err := d.file.Stat()
+	if err != nil {
+		return err
+	}
+	visible, err := current.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(original, visible) {
+		return fmt.Errorf("INVALID_CONFIGURATION: physical .wsp directory replaced during mutation")
+	}
+	return nil
+}
 
 // openManifestDir anchors both the Workspace root and its physical .wsp
 // directory to descriptors. A concurrent symlink swap cannot redirect any
@@ -25,7 +78,11 @@ func openManifestDir(root string, create bool) (*manifestDir, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rootFD.Close()
+	defer func() {
+		if rootFD != nil {
+			_ = rootFD.Close()
+		}
+	}()
 	stat, err := rootFD.Stat()
 	if err != nil {
 		return nil, err
@@ -49,7 +106,13 @@ func openManifestDir(root string, create bool) (*manifestDir, error) {
 		syscall.Close(fd)
 		return nil, fmt.Errorf("INVALID_CONFIGURATION: missing directory file")
 	}
-	return &manifestDir{file: f}, nil
+	dir := &manifestDir{file: f, root: rootFD, rootPath: root}
+	rootFD = nil // manifestDir owns the root descriptor after success
+	if err := dir.ensureAttached(); err != nil {
+		dir.close()
+		return nil, err
+	}
+	return dir, nil
 }
 func (d *manifestDir) open(name string, flags int, mode uint32) (*os.File, error) {
 	fd, err := atOpen(d.fd(), name, flags|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, mode)
@@ -81,6 +144,9 @@ func (d *manifestDir) read(name string) ([]byte, error) {
 	return io.ReadAll(f)
 }
 func (d *manifestDir) create(name string, body []byte, mode uint32) error {
+	if err := d.ensureAttached(); err != nil {
+		return err
+	}
 	f, err := d.open(name, syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL, mode)
 	if err != nil {
 		return err
@@ -113,8 +179,14 @@ func (d *manifestDir) create(name string, body []byte, mode uint32) error {
 	if err = f.Close(); err != nil {
 		return err
 	}
+	if err = d.ensureAttached(); err != nil {
+		return err
+	}
+	if err = d.file.Sync(); err != nil {
+		return err
+	}
 	complete = true
-	return d.file.Sync()
+	return nil
 }
 func (d *manifestDir) uniqueStage() (string, *os.File, error) {
 	for attempts := 0; attempts < 8; attempts++ {
@@ -142,7 +214,35 @@ func (d *manifestDir) unlinkIfOwned(name string, owner os.FileInfo) {
 		_ = atUnlink(d.fd(), name)
 	}
 }
-func (d *manifestDir) replace(name string, body []byte, original os.FileInfo) error {
+
+// ensureOwnedFile detects a replaced writer lock while holding the
+// directory descriptor. It does not purport to make an advisory same-UID
+// lock into a mandatory OS isolation boundary.
+func (d *manifestDir) ensureOwnedFile(name string, expected os.FileInfo) error {
+	f, err := d.open(name, syscall.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("INVALID_CONFIGURATION: update lock is missing or replaced: %w", err)
+	}
+	actual, err := f.Stat()
+	_ = f.Close()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(expected, actual) {
+		return fmt.Errorf("INVALID_CONFIGURATION: update lock ownership changed during mutation")
+	}
+	return nil
+}
+
+func (d *manifestDir) replace(name string, body []byte, original os.FileInfo, originalBytes []byte, lockOwner ...os.FileInfo) error {
+	if err := d.ensureAttached(); err != nil {
+		return err
+	}
+	if len(lockOwner) > 0 {
+		if err := d.ensureOwnedFile(name+".lock", lockOwner[0]); err != nil {
+			return err
+		}
+	}
 	stageName, stage, err := d.uniqueStage()
 	if err != nil {
 		return err
@@ -175,14 +275,33 @@ func (d *manifestDir) replace(name string, body []byte, original os.FileInfo) er
 		return err
 	}
 	currentInfo, err := current.Stat()
-	current.Close()
+	if err != nil {
+		current.Close()
+		return err
+	}
+	currentBytes, err := io.ReadAll(current)
+	closeErr := current.Close()
 	if err != nil {
 		return err
 	}
-	if !os.SameFile(original, currentInfo) {
-		return fmt.Errorf("INVALID_CONFIGURATION: manifest changed during update")
+	if closeErr != nil {
+		return closeErr
+	}
+	if !os.SameFile(original, currentInfo) || !bytes.Equal(originalBytes, currentBytes) {
+		return fmt.Errorf("INVALID_CONFIGURATION: manifest changed during update (concurrent content or inode mutation)")
+	}
+	if err := d.ensureAttached(); err != nil {
+		return err
+	}
+	if len(lockOwner) > 0 {
+		if err := d.ensureOwnedFile(name+".lock", lockOwner[0]); err != nil {
+			return err
+		}
 	}
 	if err := atRename(d.fd(), stageName, name); err != nil {
+		return err
+	}
+	if err := d.ensureAttached(); err != nil {
 		return err
 	}
 	return d.file.Sync()
@@ -256,7 +375,7 @@ func Patch(root string, transform func([]byte, Manifest) ([]byte, error)) (bool,
 	if _, err := LoadBytes(next); err != nil {
 		return false, fmt.Errorf("candidate manifest invalid: %w", err)
 	}
-	if err := dir.replace(manifestFilename, next, oldInfo); err != nil {
+	if err := dir.replace(manifestFilename, next, oldInfo, raw, owner); err != nil {
 		return false, err
 	}
 	return true, nil

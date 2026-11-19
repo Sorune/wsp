@@ -111,9 +111,14 @@ not imply Project deletion.
 The Product-owned manifest write boundary rejects linked `.wsp` directories
 and symlink/special-file manifest targets. On macOS and Linux, mutation now
 anchors creation and replacement to an open directory descriptor, preventing
-a competing symbolic-link swap from redirecting subsequent writes. This is
-not a sandbox against an adversary who can physically move the already-open
-directory or write to files as the same operating-system user.
+a competing symbolic-link swap from redirecting subsequent writes. Attachment
+checks compare both the opened root and `.wsp` directory to their selected
+pathnames before and after mutation. Manifest updates additionally detect
+same-inode content tampering and a replaced writer lock. These are
+fail-closed checks at observed boundaries, not an atomic filesystem
+transaction: a same-UID actor can still race between a check and a write
+or move the directory after a successful check. OS-level permission/process
+isolation remains a separate Human-gated security boundary.
 Read-only Git collection disables `core.fsmonitor` commands. Manifest
 input remains a strictly validated bounded YAML subset with unique IDs and
 exactly one Repository parent for physical Copies.

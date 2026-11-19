@@ -267,11 +267,26 @@ cannot redirect writes into the substituted link. This uses the existing
 Go 1.21 standard-library runtime and POSIX syscalls; no external dependency
 or compiler migration is required.
 
-This is not an adversarial filesystem sandbox: a process allowed to rename
-the originally opened directory itself can move that directory after the
-descriptor is bound, and a process sharing the same user permissions can
-still interfere with files. Project authorization and filesystem access
-control remain independently required.
+Additional fail-closed checks compare the opened Workspace root with its
+selected pathname and compare the physical `.wsp` directory inode with the
+root's current `.wsp` entry. They run at opening, before creation or
+replacement, and after the operation. A detached/replaced Workspace root or
+`.wsp` directory is reported as an invalid configuration instead of
+silently writing to an already moved directory. For manifest updates, WSP
+also verifies that the existing manifest still has the same inode **and
+bytes** as the snapshot read for the update, and that the exclusive writer
+lock is still the same file before the final replacement.
+
+This is **not a full adversarial filesystem sandbox**: attachment checks
+are not atomic with the subsequent write or rename, so a malicious
+same-UID actor can still move the directory in the small interval between
+the last check and the syscall or modify files after a successful update.
+An error after a completed rename can report a lost attachment even though
+the pinned original directory has already changed. No automatic recovery,
+cleanup of external paths, or Project mutation is authorized by these
+checks. Complete isolation from a same-UID attacker requires an OS-enforced
+permission/process boundary, selected by the Human; WSP's advisory lock is
+not a mandatory OS lock.
 
 Copy inspection and discovery distinguish command completion from candidate
 health. JSON `observation_status` is `COMPLETED` when an observation succeeds,
