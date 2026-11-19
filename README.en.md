@@ -60,7 +60,14 @@ Project identity.
 ## Commands
 
 ```bash
-wsp init [path]
+wsp init [path] [--from OLD_WORKSPACE_ROOT]
+wsp workspace list [root] [--json]
+wsp workspace add <root> <repository> [--id ID] [--project EXISTING_PROJECT_ID]
+wsp workspace relocate <root> <repository-id> <new-repository-path>
+wsp workspace copy list <root> [--json]
+wsp workspace copy inspect <root> <repository-id> <path> [--json]
+wsp workspace copy discover <root> <directory> [--json]
+wsp workspace copy add <root> <repository-id> <path> --id <workspace-copy-id>
 wsp inspect [path] [--json]
 wsp repo inspect [path] [--json]
 wsp lens tree [path] --axis logical|session [--json]
@@ -77,7 +84,9 @@ wsp version
 `wsp init` owns only Workspace bootstrap/config mutation. It does not modify Git
 history or remotes. Relative target paths are resolved from the calling directory,
 not the WSP source checkout. Relations are declared; directory names are not treated
-as semantic hierarchy. See [`docs/USAGE.md`](docs/USAGE.md) for the multi-repository
+as semantic hierarchy. Explicit workspace add/relocate change only the named Product manifest after Git identity checks. init --from preserves the source. There is no automatic disk discovery, global workspace switch, or Project authority transfer.
+
+See [`docs/USAGE.md`](docs/USAGE.md) for the multi-repository
 manifest recipe and command-selection guidance.
 
 Human and JSON output use the same projection. JSON is deterministic,

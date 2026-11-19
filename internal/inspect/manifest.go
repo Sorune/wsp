@@ -20,10 +20,13 @@ func Manifest(root string) (model.Document, error) {
 	// never to the process caller's current directory. Keep the source value for
 	// provenance while exposing the resolved path to Lens consumers.
 	for i := range d.Entities {
-		if d.Entities[i].Kind != "REPOSITORY" {
+		if d.Entities[i].Kind != "REPOSITORY" && d.Entities[i].Kind != "WORKSPACE_COPY" {
 			continue
 		}
 		configured := d.Entities[i].Attributes["path"]
+		if configured == "" {
+			continue
+		}
 		resolved := configured
 		if !filepath.IsAbs(configured) {
 			resolved = filepath.Join(root, configured)
@@ -34,6 +37,12 @@ func Manifest(root string) (model.Document, error) {
 		}
 		d.Entities[i].Attributes["path_configured"] = configured
 		d.Entities[i].Attributes["path"] = filepath.Clean(resolved)
+		// The configured (logical) pathname may be a symlink into another
+		// volume. Preserve it but also expose the observed physical pathname.
+		// An offline volume must not invalidate declared Lens topology.
+		if physical, physicalErr := filepath.EvalSymlinks(resolved); physicalErr == nil {
+			d.Entities[i].Attributes["path_physical"] = filepath.Clean(physical)
+		}
 	}
 	if err := ValidateDocument(d); err != nil {
 		return model.Document{}, err

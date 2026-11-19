@@ -91,6 +91,35 @@ projects, and explicit relations. It never imports private registries or creates
 authority, sessions, promotion state, or Git mutations. Existing valid manifests
 are never silently replaced.
 
+## Explicit Workspace configuration
+
+The Git adapter, Inspector, Lens and Scanner remain read-only. Beyond initial
+init, explicitly invoked workspace add, workspace relocate, workspace copy
+add and init --from modify only the named Product manifest and never mutate a Git checkout,
+Project state, remote, deployment, authority or public publication.
+
+Repository registration requires exact Git-root and sanitized origin evidence;
+no Project is inferred. A registered repository retains its logical ID across
+a verified physical relocation. init --from creates a separate Workspace root
+without deleting or rebinding the existing manifest. No global active-root
+switch or automatic path repair is implied.
+
+Lens preserves the authored pathname and can additionally expose a physical
+resolved path when a symlink target is available. Physical unavailability must
+not imply Project deletion.
+
+workspace list observes multiple declared repositories and distinguishes
+UNAVAILABLE from IDENTITY_MISMATCH. Neither state authorizes cleanup or
+changes a Project's semantics.
+
+WORKSPACE_COPY is an explicitly bound physical Git checkout under one
+Repository identity, not a new Project or authority owner. Copy inspection and
+bounded discovery are read-only and never fetch Git objects. Only a clean
+copy with matching origin and locally proven matching/related commits may be
+explicitly registered. Dirty state is reported as UNTRACKED_DIRTY, uncertain
+history as REVIEW_REQUIRED, without deleting prior declarations or changing
+the Project or promotion state. Legacy copy declarations remain readable.
+
 ## Excluded from V0
 
 Session Guard, Agent Rule enforcement, provider identity, authority receipts,

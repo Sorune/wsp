@@ -29,6 +29,7 @@ type Item struct {
 	Name    string
 	Path    string
 	Project string
+	Origin  string
 }
 
 func Path(root string) string { return filepath.Join(root, ManifestRelativePath) }
@@ -67,6 +68,20 @@ func Render(m Manifest) ([]byte, error) {
 	var b strings.Builder
 	b.WriteString("schema_version: 1\n")
 	b.WriteString("workspace_id: " + strconv.Quote(m.WorkspaceID) + "\n")
+	if len(m.Entities) > 0 {
+		b.WriteString("entities:\n")
+		for _, entity := range m.Entities {
+			b.WriteString("  - id: " + strconv.Quote(entity.ID) + "\n")
+			b.WriteString("    kind: " + strconv.Quote(entity.Kind) + "\n")
+			b.WriteString("    name: " + strconv.Quote(entity.Name) + "\n")
+			if entity.Path != "" {
+				b.WriteString("    path: " + strconv.Quote(entity.Path) + "\n")
+			}
+			if entity.Origin != "" {
+				b.WriteString("    origin: " + strconv.Quote(entity.Origin) + "\n")
+			}
+		}
+	}
 	if len(m.Repositories) == 0 {
 		b.WriteString("repositories: []\n")
 	} else {
@@ -76,6 +91,9 @@ func Render(m Manifest) ([]byte, error) {
 		b.WriteString("  - id: " + strconv.Quote(item.ID) + "\n")
 		b.WriteString("    name: " + strconv.Quote(item.Name) + "\n")
 		b.WriteString("    path: " + strconv.Quote(item.Path) + "\n")
+		if item.Origin != "" {
+			b.WriteString("    origin: " + strconv.Quote(item.Origin) + "\n")
+		}
 		if item.Project != "" {
 			b.WriteString("    project: " + strconv.Quote(item.Project) + "\n")
 		}
@@ -246,6 +264,8 @@ func setItem(list []Item, i int, k, v string) {
 		list[i].Path = v
 	case "project":
 		list[i].Project = v
+	case "origin":
+		list[i].Origin = v
 	}
 }
 func setRelation(r *model.Relation, k, v string) {
@@ -299,13 +319,18 @@ func Validate(m Manifest) error {
 func ToDocument(m Manifest) model.Document {
 	d := model.Document{SchemaVersion: 1, Status: "OK", Target: m.WorkspaceID, Entities: []model.Entity{{ID: m.WorkspaceID, Kind: "WORKSPACE", Name: m.WorkspaceID, Provenance: model.ProvenanceConfig}}}
 	for _, entity := range m.Entities {
-		d.Entities = append(d.Entities, model.Entity{ID: entity.ID, Kind: entity.Kind, Name: entity.Name, Provenance: model.ProvenanceConfig})
+		if entity.Kind == "WORKSPACE_COPY" {
+			d.Entities = append(d.Entities, model.Entity{ID: entity.ID, Kind: entity.Kind, Name: entity.Name,
+				Attributes: map[string]string{"path": entity.Path, "origin": entity.Origin}, Provenance: model.ProvenanceConfig})
+		} else {
+			d.Entities = append(d.Entities, model.Entity{ID: entity.ID, Kind: entity.Kind, Name: entity.Name, Provenance: model.ProvenanceConfig})
+		}
 	}
 	for _, p := range m.Projects {
 		d.Entities = append(d.Entities, model.Entity{ID: p.ID, Kind: "PROJECT", Name: p.Name, Provenance: model.ProvenanceConfig})
 	}
 	for _, r := range m.Repositories {
-		d.Entities = append(d.Entities, model.Entity{ID: r.ID, Kind: "REPOSITORY", Name: r.Name, Attributes: map[string]string{"path": r.Path}, Provenance: model.ProvenanceConfig})
+		d.Entities = append(d.Entities, model.Entity{ID: r.ID, Kind: "REPOSITORY", Name: r.Name, Attributes: map[string]string{"path": r.Path, "origin": r.Origin}, Provenance: model.ProvenanceConfig})
 	}
 	d.Relations = append(d.Relations, m.Relations...)
 	for i := range d.Relations {

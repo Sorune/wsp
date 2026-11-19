@@ -21,6 +21,14 @@ it uses the calling directory.
 | `wsp manifest draft [repository] [--json] [--max-output-bytes N] [--exclude-dir-name NAME ...]` | One repository root; caller directory | None | Bounded draft/review JSON | No |
 | `wsp manifest validate --input FILE [--json]` | One manifest file | None | Validation summary | No |
 | `wsp init [target]` | Directory; caller directory | None; creates manifest | Not offered | Yes, creates `.wsp/workspace.yaml`; creates target directory if missing |
+| `wsp init <target> --from <existing-root>` | New root | Source manifest | No | New manifest only; source preserved |
+| `wsp workspace list [root] [--json]` | Workspace root | Existing manifest | Yes | No |
+| `wsp workspace add <root> <repository> [--id ID] [--project EXISTING_PROJECT_ID]` | Exact Git root | Existing manifest | No | Manifest only |
+| `wsp workspace relocate <root> <repository-id> <new-path>` | Exact new Git root | Existing manifest | No | Manifest only |
+| `wsp workspace copy inspect <root> <repository-id> <checkout> [--json]` | Explicit checkout | Existing manifest | Yes | No |
+| `wsp workspace copy discover <root> <directory> [--json]` | Bounded directory | Existing manifest | Yes | No |
+| `wsp workspace copy list <root> [--json]` | Registered copies | Existing manifest | Yes | No |
+| `wsp workspace copy add <root> <repository-id> <checkout> --id <copy-id>` | Clean related checkout | Existing manifest | No | Manifest only |
 
 `repo inspect` is the direct command for Git facts about one repository. The
 compatibility `inspect` command reports the same kind of Git facts. `status` has no target argument and always observes the calling directory's
@@ -32,6 +40,85 @@ stable JSON envelope for `repo inspect`, `inspect`, `status`, and `lens tree`.
 `--help` anywhere in a command displays help before command execution. Manifest
 commands show their draft/validation-specific help. `wsp help` displays the
 general help. `init` has no JSON mode.
+
+## Explicit multi-repository registration and Workspace movement
+
+~~~sh
+wsp init /path/to/workspace
+wsp workspace add /path/to/workspace /path/to/internal/repo
+wsp workspace add /path/to/workspace /path/to/external/another-repo
+wsp workspace list /path/to/workspace --json
+wsp lens tree /path/to/workspace --axis logical --json
+
+# Explicit identity-checked relocation after a Git checkout moves:
+wsp workspace relocate /path/to/workspace repository:github.com/example/another-repo /new/path
+
+# Initialize another Workspace root with declarations from an existing root:
+wsp init /new/workspace --from /path/to/workspace
+~~~
+
+workspace add verifies one exact Git root and sanitized origin, captures both
+physical repository identity and explicitly authored logical relation, and
+blocks duplicate origins or physical roots. A Project is never inferred from
+directory names. --project requires a pre-existing declared Project.
+
+workspace relocate preserves the repository ID and logical relations. It
+requires matching origin evidence. After registration, a saved origin supports
+relocation even when the old directory disappeared; a legacy entry without
+origin requires its old Git checkout to remain inspectable.
+
+workspace list aggregates declared repositories as AVAILABLE, UNAVAILABLE or
+IDENTITY_MISMATCH. A partially unavailable external volume is not interpreted
+as deleted project state. It does not scan unregistered locations. Symlink
+aliases resolve to the same physical Git root.
+
+init --from copies declarations and rebases relative paths, preserving the old
+manifest, comments, Project entities and relation IDs. It does not globally
+switch the active Workspace. Existing target manifests are never replaced.
+
+Explicit registration/relocation writes only the target Workspace manifest
+with an exclusive update lock, candidate validation and atomic replacement.
+All Git and Lens/Scanner observation paths remain read-only. There is no
+automatic discovery, semantic acceptance, Git clone/fetch/push, deployment,
+cleanup, authority transfer or public publication.
+
+## Multiple physical checkouts of the same Git repository
+
+A second checkout with the same normalized Git origin is a distinct
+`WORKSPACE_COPY`, not another logical `REPOSITORY` or inferred Project.
+Explicitly inspect candidate locations and register only eligible copies:
+
+~~~sh
+wsp workspace copy discover /path/to/workspace /path/to/checkouts --json
+wsp workspace copy inspect /path/to/workspace repository:github.com/example/repo /path/to/second --json
+wsp workspace copy add /path/to/workspace repository:github.com/example/repo /path/to/second --id workspace-copy:second
+wsp workspace copy list /path/to/workspace --json
+wsp workspace list /path/to/workspace --json
+~~~
+
+Inspect and discover observe only explicit paths or immediate children of
+an explicit directory (up to 256 entries). No global scan, Git fetch, or
+implicit manifest mutation occurs.
+
+The read-only decision is `ALIGNED` when the revisions match, `RELATED` when
+local Git objects prove ancestor/descendant relationship, `UNTRACKED_DIRTY`
+when the candidate copy is dirty, `UNTRACKED_DIRTY_PARENT` when the registered
+primary is dirty, and `REVIEW_REQUIRED` when commit ancestry is unproven.
+Other decisions include `UNAVAILABLE`, `ORIGIN_MISMATCH` and
+`PARENT_IDENTITY_MISMATCH`.
+
+Only clean ALIGNED or RELATED copies can be explicitly registered.
+Tracked copies that later become dirty remain declared but are dynamically
+reported as UNTRACKED_DIRTY; no cleanup, deletion, reset or accepted Project
+state is inferred. A declared WORKSPACE_COPY has its own identity, path,
+origin, and logical relation under its Repository. Legacy copy declarations
+without physical metadata remain UNCONFIGURED_COPY rather than failing
+existing manifests.
+
+The `init --from` command rebases copy paths as well as Repository paths and
+preserves IDs, relations, and source manifest contents. The aggregate
+`workspace list` also reports registered copies separately from logical
+Repository counts.
 
 ## Optional Scanner workflow
 
@@ -100,8 +187,10 @@ Project-owned semantics.
 
 See [`examples/workspace.yaml`](../examples/workspace.yaml). Repository paths
 may be relative to the manifest-owning workspace or absolute. WSP reports the
-resolved path as `attributes.path` and retains the configured value as
-`attributes.path_configured` in Lens output.
+resolved path as `attributes.path`, retains the configured value as
+`attributes.path_configured`, and when the target is accessible, exposes
+`attributes.path_physical` after symlink resolution. Offline volumes do not
+remove logical Lens declarations.
 
 IDs are globally unique within the manifest. Prefixes such as `workspace:`,
 `project:`, and `repository:` are readable conventions only; the parser does not

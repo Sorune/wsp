@@ -68,7 +68,14 @@ surface를 사용합니다. `init`이 수행하는 mutation은 Workspace Root �
 history/remote를 변경하지 않습니다.
 
 ```bash
-wsp init [path]
+wsp init [path] [--from OLD_WORKSPACE_ROOT]
+wsp workspace list [root] [--json]
+wsp workspace add <root> <repository> [--id ID] [--project EXISTING_PROJECT_ID]
+wsp workspace relocate <root> <repository-id> <new-repository-path>
+wsp workspace copy list <root> [--json]
+wsp workspace copy inspect <root> <repository-id> <path> [--json]
+wsp workspace copy discover <root> <directory> [--json]
+wsp workspace copy add <root> <repository-id> <path> --id <workspace-copy-id>
 wsp inspect [path] [--json]
 wsp repo inspect [path] [--json]
 wsp lens tree [path] --axis logical|session [--json]
@@ -83,6 +90,8 @@ wsp version
 ```
 
 상대 target path는 WSP source checkout이 아니라 명령을 호출한 directory 기준으로 해석됩니다.
+다중 Repository 등록·이전은 명시적으로 실행할 때만 WSP Manifest를 수정하며 Git 소스·프로젝트 권한·공개 배포에는 영향을 주지 않습니다. init --from은 새 위치에 선언을 복사하고 원본은 유지합니다. 자동 디스크 스캔이나 전역 활성 Workspace 전환은 수행하지 않습니다.
+
 멀티-repository manifest 작성법과 command 선택 기준은 [`docs/USAGE.md`](docs/USAGE.md)를 참조합니다.
 
 relation은 선언으로만 정해지고 directory name은 semantic hierarchy로

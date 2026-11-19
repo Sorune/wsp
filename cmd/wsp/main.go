@@ -14,7 +14,7 @@ import (
 	"github.com/Sorune/wsp/internal/present"
 )
 
-const version = "0.7.3"
+const version = "0.8.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -94,6 +94,8 @@ func run(args []string) error {
 		return scannerCommand(args[1:])
 	case "manifest":
 		return manifestCommand(args[1:])
+	case "workspace":
+		return workspaceCommand(args[1:])
 	case "init":
 		return initCommand(args[1:])
 	default:
@@ -129,7 +131,14 @@ Commands:
                                   Preview-only deterministic manifest DRAFT
   manifest validate --input FILE [--json]
                                   Read-only manifest syntax/contract validation
-  init [target]                   Create .wsp/workspace.yaml (mutates target)
+  workspace list [root] [--json]  Observe all declared repositories
+  workspace add <root> <repository> [--id ID] [--project EXISTING_PROJECT_ID]
+                                  Explicit manifest-only registration
+  workspace relocate <root> <repository-id> <new-path>
+                                  Explicit identity-checked manifest path update
+  workspace copy <list|inspect|discover|add> ...
+                                  Observe or explicitly register Git copies
+  init [target] [--from ROOT]     Create .wsp/workspace.yaml; --from copies explicit declarations
   doctor                          Check local runtime prerequisites
   version                         Print version
 
@@ -147,8 +156,7 @@ JSON is a separate observation contract, not the WSP semantic envelope.
 manifest draft never writes to its target; draft output remains unaccepted and
 contains no Project or session semantics. Validate reads its input only. init
 defaults to the calling directory. It creates .wsp/workspace.yaml and may
-create the target directory when missing. Init has no JSON mode. All commands
-except init are read-only. Help never executes a command.
+create the target directory when missing. Init has no JSON mode. All commands except init and explicit workspace add/relocate/copy add are read-only. Help never executes a command.
 
 Use --help anywhere in a command to show this help before command execution.
 `)
@@ -231,6 +239,9 @@ func lensCommand(args []string) error {
 }
 
 func initCommand(args []string) error {
+	if len(args) == 3 && args[1] == "--from" {
+		return initFromCommand(targetPath(args[0]), targetPath(args[2]))
+	}
 	if len(args) > 1 {
 		return fail("USAGE", "init [path]", 2)
 	}
