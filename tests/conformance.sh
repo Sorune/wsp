@@ -268,7 +268,7 @@ SCAN_STATUS_BEFORE="$(git -C "$SCAN_REPO" status --porcelain)"
 cmp "$TMP/scan-a.json" "$TMP/scan-b.json" && ok 'scanner scan deterministic' || fail 'scanner scan nondeterministic'
 scan_json="$(cat "$TMP/scan-a.json")"
 contains "$scan_json" '"id": "wsp-scanner"' 'scanner public producer'
-contains "$scan_json" '"version": "0.8.1"' 'scanner public version'
+contains "$scan_json" '"version": "0.8.2"' 'scanner public version'
 contains "$scan_json" '"unknowns": []' 'scanner empty unknowns array'
 contains "$scan_json" '"diagnostics": []' 'scanner empty diagnostics array'
 "$WSP" scanner view --input "$TMP/scan-a.json" --level L0 > "$TMP/scan-l0.json"
@@ -284,6 +284,67 @@ contains "$scan_diff" '"candidate_changed": 0' 'same scan has no changed candida
 SCAN_STATUS_AFTER="$(git -C "$SCAN_REPO" status --porcelain)"
 [[ "$SCAN_STATUS_BEFORE" == "$SCAN_STATUS_AFTER" ]] && ok 'scanner commands do not mutate repository' || fail 'scanner commands mutated repository'
 
+
+# WSP 0.8.x hardening: Copy observation status and unsupported flags.
+COPY_WS="$TMP/copy-status-workspace"
+"$WSP" init "$COPY_WS" >/dev/null
+git -C "$REPO" remote set-url origin 'https://github.com/Example/CopyFixture.git'
+"$WSP" workspace add "$COPY_WS" "$REPO" >/dev/null
+copy_json="$("$WSP" workspace copy inspect "$COPY_WS" repository:github.com/example/copyfixture "$TMP/nonexistent-copy" --json)"
+contains "$copy_json" '"status": "PARTIAL"' 'missing Copy is not reported healthy'
+contains "$copy_json" '"observation_status": "COMPLETED"' 'Copy command completion separate from health'
+contains "$copy_json" '"decision": "UNAVAILABLE"' 'missing Copy decision remains distinct'
+if "$WSP" workspace copy add "$COPY_WS" repository:github.com/example/copyfixture "$TMP/nonexistent-copy" --id workspace-copy:absent --allow-diverged > "$TMP/unsupported.log" 2>&1; then
+  fail 'unsupported allow-diverged is rejected'
+else
+  ok 'unsupported allow-diverged is rejected'
+fi
+not_contains "$(cat "$TMP/unsupported.log")" '[--allow-diverged]' 'unsupported flag absent from CLI help'
+
+# A malformed and duplicate-key Manifest must be rejected, never normalized.
+DUPLICATE_WS="$TMP/duplicate-workspace"
+mkdir -p "$DUPLICATE_WS/.wsp"
+cat > "$DUPLICATE_WS/.wsp/workspace.yaml" <<'EOF'
+schema_version: 1
+workspace_id: "workspace:a"
+workspace_id: "workspace:b"
+repositories: []
+relations: []
+EOF
+run_json_failure INVALID_CONFIGURATION 'duplicated Workspace ID key' lens tree "$DUPLICATE_WS" --axis logical
+cat > "$DUPLICATE_WS/.wsp/workspace.yaml" <<'EOF'
+schema_version: 1
+workspace_id: "workspace:unterminated
+repositories: []
+relations: []
+EOF
+run_json_failure INVALID_CONFIGURATION 'unterminated Manifest scalar' lens tree "$DUPLICATE_WS" --axis logical
+
+# Git optimization must not execute configured fsmonitor and must preserve
+# observed Repository facts with no more than four Git process invocations.
+HOOK="$TMP/fsmonitor.sh"
+cat > "$HOOK" <<EOF
+#!/bin/sh
+echo invoked >> "$TMP/fsmonitor.invoked"
+exit 0
+EOF
+chmod 700 "$HOOK"
+git -C "$REPO" config core.fsmonitor "$HOOK"
+TRACE_BIN="$TMP/git-tracer"
+mkdir -p "$TRACE_BIN"
+REAL_GIT="$(command -v git)"
+cat > "$TRACE_BIN/git" <<EOF
+#!/bin/sh
+echo git >> "$TMP/git-calls.log"
+exec "$REAL_GIT" "\$@"
+EOF
+chmod 700 "$TRACE_BIN/git"
+: > "$TMP/git-calls.log"
+PATH="$TRACE_BIN:$PATH" "$WSP" workspace list "$COPY_WS" --json > "$TMP/optimized-workspace.json"
+[[ ! -e "$TMP/fsmonitor.invoked" ]] && ok 'Git observation does not run fsmonitor' || fail 'Git observation ran fsmonitor'
+calls="$(wc -l < "$TMP/git-calls.log" | tr -d ' ')"
+[[ "$calls" -le 4 ]] && ok 'Git process count bounded to 4 per Repository' || fail "excess Git processes: $calls"
+contains "$(cat "$TMP/optimized-workspace.json")" '"status": "AVAILABLE"' 'optimized Git observation preserves status'
 printf 'PASS=%s\nFAIL=%s\n' "$PASS" "$FAIL"
 if [[ "$FAIL" -gt 0 ]]; then printf 'STATUS: FAIL\n'; exit 1; fi
 printf 'STATUS: PASS\n'

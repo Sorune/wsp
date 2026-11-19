@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -459,78 +458,14 @@ func manifestTextValue(value string) string {
 	return value
 }
 
-// An exclusive short-lived lock serializes WSP manifest writes. Stale locks
-// are never silently broken. The temporary file is validated before replace.
+// Patch pins every manifest update to one physical directory descriptor.
 func patchWorkspace(root string, transform func([]byte, config.Manifest) ([]byte, error)) (bool, error) {
-	path := config.Path(root)
-	if err := config.CheckManifestWriteBoundary(root); err != nil {
-		return false, err
-	}
-	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return false, fmt.Errorf("manifest update lock unavailable: %w", err)
-	}
-	lockInfo, infoErr := lock.Stat()
-	if closeErr := lock.Close(); closeErr != nil {
-		return false, closeErr
-	}
-	if infoErr != nil {
-		return false, infoErr
-	}
-	defer func() {
-		// A competing writer's replacement lock must never be deleted by us.
-		if current, statErr := os.Lstat(path + ".lock"); statErr == nil && os.SameFile(lockInfo, current) {
-			_ = os.Remove(path + ".lock")
-		}
-	}()
-	m, err := config.Load(root)
+	changed, err := config.Patch(root, transform)
 	if err != nil {
 		return false, err
 	}
-	original, err := os.ReadFile(path)
-	if err != nil {
-		return false, err
-	}
-	next, err := transform(original, m)
-	if err != nil {
-		return false, err
-	}
-	if string(next) == string(original) {
+	if !changed {
 		fmt.Println("STATUS: NO_CHANGE_REQUIRED\nMUTATION: NONE")
-		return false, nil
 	}
-	stage, err := os.CreateTemp(filepath.Dir(path), ".workspace-stage-*")
-	if err != nil {
-		return false, err
-	}
-	stagePath := stage.Name()
-	defer os.Remove(stagePath)
-	if info, err := os.Stat(path); err == nil {
-		_ = stage.Chmod(info.Mode().Perm())
-	}
-	if _, err = stage.Write(next); err != nil {
-		stage.Close()
-		return false, err
-	}
-	if err = stage.Sync(); err != nil {
-		stage.Close()
-		return false, err
-	}
-	if err = stage.Close(); err != nil {
-		return false, err
-	}
-	if _, err = config.LoadFile(stagePath); err != nil {
-		return false, fmt.Errorf("candidate manifest invalid: %w", err)
-	}
-	if err = config.CheckManifestWriteBoundary(root); err != nil {
-		return false, err
-	}
-	if err = os.Rename(stagePath, path); err != nil {
-		return false, err
-	}
-	if dir, err := os.Open(filepath.Dir(path)); err == nil {
-		_ = dir.Sync()
-		dir.Close()
-	}
-	return true, nil
+	return changed, nil
 }

@@ -109,12 +109,20 @@ resolved path when a symlink target is available. Physical unavailability must
 not imply Project deletion.
 
 The Product-owned manifest write boundary rejects linked `.wsp` directories
-and symlink/special-file manifest targets. Read-only Git collection disables
-configured core.fsmonitor commands. Manifest input is a strictly validated
-bounded YAML subset; duplicate IDs and multiply-parented physical Copies
-are invalid configurations. These checks do not make filesystem path swaps
-by an adversarial concurrent writer impossible; that remains a separate
-platform-level I/O security boundary.
+and symlink/special-file manifest targets. On macOS and Linux, mutation now
+anchors creation and replacement to an open directory descriptor, preventing
+a competing symbolic-link swap from redirecting subsequent writes. This is
+not a sandbox against an adversary who can physically move the already-open
+directory or write to files as the same operating-system user.
+Read-only Git collection disables `core.fsmonitor` commands. Manifest
+input remains a strictly validated bounded YAML subset with unique IDs and
+exactly one Repository parent for physical Copies.
+
+Copy observation status is separate from observation completion: dirty,
+unavailable and unverified candidates yield PARTIAL, while successful
+observation still exits normally. Git Adapter status uses the porcelain-v2
+branch/revision/working-tree/upstream envelope to minimize subprocesses.
+No Project authority, maturity, acceptance or deployment is inferred.
 
 workspace list observes multiple declared repositories and distinguishes
 UNAVAILABLE from IDENTITY_MISMATCH. Neither state authorizes cleanup or

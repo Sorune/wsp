@@ -260,7 +260,26 @@ link outside the selected Workspace config directory. Repository path
 aliases remain separate from the Product-owned manifest write boundary.
 Read-only Git observation disables `core.fsmonitor` side effects.
 
-This guard covers pre-existing, statically observable links. A malicious
-actor concurrently replacing filesystem path components is a distinct
-race threat requiring a separately authorized descriptor-relative I/O
-design; ordinary local use does not claim a race-proof sandbox.
+On macOS and Linux, manifest creation, update locks, temporary files and
+replacement now operate relative to a previously opened physical `.wsp`
+directory descriptor. Symbolic-link swaps after that directory is opened
+cannot redirect writes into the substituted link. This uses the existing
+Go 1.21 standard-library runtime and POSIX syscalls; no external dependency
+or compiler migration is required.
+
+This is not an adversarial filesystem sandbox: a process allowed to rename
+the originally opened directory itself can move that directory after the
+descriptor is bound, and a process sharing the same user permissions can
+still interfere with files. Project authorization and filesystem access
+control remain independently required.
+
+Copy inspection and discovery distinguish command completion from candidate
+health. JSON `observation_status` is `COMPLETED` when an observation succeeds,
+while top-level status is `PARTIAL` for unavailable, dirty or unverified copies.
+The exit code still indicates whether the observation command executed.
+The removed `--allow-diverged` option is not accepted or suggested.
+
+The Git Adapter uses one `porcelain-v2` status query for revision, branch,
+working-tree and upstream facts. Exact root and origin checks stay separate.
+This reduces subprocess calls per registered Repository to four (from about
+eight) while preserving observed facts.

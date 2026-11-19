@@ -37,6 +37,9 @@ func command(path string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// Inspect performs three local Git queries per Repository: physical root,
+// porcelain-v2 status (including revision/branch/upstream/ahead-behind), origin.
+// It does not refresh the index or execute fsmonitor helpers.
 func Inspect(path string) (Facts, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -50,43 +53,46 @@ func Inspect(path string) (Facts, error) {
 	if err != nil {
 		return Facts{}, err
 	}
-	head, err := command(root, "rev-parse", "HEAD")
-	if err != nil {
-		return Facts{}, fmt.Errorf("TARGET_UNAVAILABLE: revision unavailable: %w", err)
-	}
-	branch, err := command(root, "symbolic-ref", "--quiet", "--short", "HEAD")
-	if err != nil {
-		branch = "DETACHED"
-	}
-	status, err := command(root, "status", "--porcelain=v1", "--untracked-files=normal")
+	raw, err := command(root, "status", "--porcelain=v2", "--branch", "--untracked-files=normal")
 	if err != nil {
 		return Facts{}, fmt.Errorf("TARGET_UNAVAILABLE: working-tree unavailable: %w", err)
 	}
-	tree := "CLEAN"
-	if status != "" {
-		tree = "DIRTY"
-	}
-	remote, err := command(root, "remote", "get-url", "origin")
-	if err != nil || remote == "" {
-		remote = "UNKNOWN"
-	} else {
-		remote = sanitizeRemote(remote)
-	}
-	upstream, err := command(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
-	if err != nil {
-		upstream = "UNKNOWN"
-	}
-	ahead, behind := "UNKNOWN", "UNKNOWN"
-	if upstream != "UNKNOWN" {
-		counts, countErr := command(root, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
-		if countErr == nil {
-			parts := strings.Fields(counts)
-			if len(parts) == 2 {
-				behind, ahead = parts[0], parts[1]
+	result := Facts{Root: root, Path: abs, WorkingTree: "CLEAN", Remote: "UNKNOWN",
+		Branch: "DETACHED", Upstream: "UNKNOWN", Ahead: "UNKNOWN", Behind: "UNKNOWN"}
+	for _, line := range strings.Split(raw, "\n") {
+		if line == "" {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "# branch.oid "):
+			result.Revision = strings.TrimPrefix(line, "# branch.oid ")
+		case strings.HasPrefix(line, "# branch.head "):
+			head := strings.TrimPrefix(line, "# branch.head ")
+			if head != "(detached)" {
+				result.Branch = head
 			}
+		case strings.HasPrefix(line, "# branch.upstream "):
+			result.Upstream = strings.TrimPrefix(line, "# branch.upstream ")
+		case strings.HasPrefix(line, "# branch.ab "):
+			values := strings.Fields(strings.TrimPrefix(line, "# branch.ab "))
+			if len(values) == 2 && strings.HasPrefix(values[0], "+") && strings.HasPrefix(values[1], "-") {
+				result.Ahead = strings.TrimPrefix(values[0], "+")
+				result.Behind = strings.TrimPrefix(values[1], "-")
+			}
+		case strings.HasPrefix(line, "# "):
+			// Forward-compatible metadata stays observational, not Dirty.
+		default:
+			result.WorkingTree = "DIRTY"
 		}
 	}
-	return Facts{Root: root, Path: abs, Revision: head, Branch: branch, WorkingTree: tree, Remote: remote, Upstream: upstream, Ahead: ahead, Behind: behind}, nil
+	if len(result.Revision) != 40 && len(result.Revision) != 64 {
+		return Facts{}, fmt.Errorf("TARGET_UNAVAILABLE: revision unavailable")
+	}
+	remote, remoteErr := command(root, "remote", "get-url", "origin")
+	if remoteErr == nil && remote != "" {
+		result.Remote = sanitizeRemote(remote)
+	}
+	return result, nil
 }
 
 func sanitizeRemote(remote string) string {

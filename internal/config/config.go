@@ -44,35 +44,11 @@ func Discover(root string) (Manifest, error) {
 }
 
 func Write(root string, m Manifest) error {
-	if err := Validate(m); err != nil {
-		return err
-	}
-	path := Path(root)
-	if err := CheckManifestWriteBoundary(root); err != nil {
-		return err
-	}
-	if _, err := os.Lstat(path); err == nil {
-		return fmt.Errorf("INVALID_CONFIGURATION: manifest already exists")
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	if err := CheckManifestWriteBoundary(root); err != nil {
-		return err
-	}
-	b, err := Render(m)
+	body, err := Render(m)
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.Write(b)
-	return err
+	return WriteBytes(root, body)
 }
 
 // Render serializes a validated manifest without writing it to disk.
@@ -151,9 +127,15 @@ func LoadFile(path string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, fmt.Errorf("TARGET_UNAVAILABLE: manifest unavailable: %w", err)
 	}
+	return LoadBytes(raw)
+}
+
+// LoadBytes validates the supported manifest subset without filesystem I/O.
+func LoadBytes(raw []byte) (Manifest, error) {
 	if err := validateManifestSubset(raw); err != nil {
 		return Manifest{}, err
 	}
+	var err error
 	m := Manifest{}
 	section, item := "", -1
 	s := bufio.NewScanner(bytes.NewReader(raw))

@@ -58,7 +58,7 @@ func workspaceCopyCommand(args []string) error {
 		return copyDiscover(targetPath(args[1]), targetPath(args[2]), len(args) == 4)
 	case "add":
 		if len(args) != 6 || args[4] != "--id" {
-			return fail("USAGE", "workspace copy add <root> <repository-id> <checkout> --id <copy-id> [--allow-diverged]", 2)
+			return fail("USAGE", "workspace copy add <root> <repository-id> <checkout> --id <copy-id>", 2)
 		}
 		return copyAdd(targetPath(args[1]), args[2], targetPath(args[3]), args[5])
 	default:
@@ -156,10 +156,24 @@ func assessCopy(root string, m config.Manifest, repositoryID, path, copyID strin
 	return view
 }
 
+// A successful observation does not imply that every physical checkout is
+// usable. Classifications requiring action are explicitly PARTIAL.
+func copyObservationStatus(rows []copyView) string {
+	for _, row := range rows {
+		switch row.Decision {
+		case "ALIGNED", "RELATED", "TRACKED":
+		default:
+			return "PARTIAL"
+		}
+	}
+	return "OK"
+}
+
 func emitCopies(kind string, rows []copyView, jsonOut bool) error {
+	status := copyObservationStatus(rows)
 	if jsonOut {
 		out, err := json.MarshalIndent(map[string]interface{}{
-			"command": kind, "status": "OK", "mutation": "NONE", "copies": rows,
+			"command": kind, "status": status, "observation_status": "COMPLETED", "mutation": "NONE", "copies": rows,
 		}, "", "  ")
 		if err != nil {
 			return fail("INTERNAL_FAILURE", err.Error(), 1)
@@ -167,7 +181,7 @@ func emitCopies(kind string, rows []copyView, jsonOut bool) error {
 		fmt.Println(string(out))
 		return nil
 	}
-	fmt.Printf("WSP WORKSPACE COPIES\nCOMMAND: %s\nMUTATION: NONE\n", kind)
+	fmt.Printf("WSP WORKSPACE COPIES\nCOMMAND: %s\nSTATUS: %s\nOBSERVATION_STATUS: COMPLETED\nMUTATION: NONE\n", kind, status)
 	for _, row := range rows {
 		fmt.Printf("COPY: %s\nREPOSITORY: %s\nPATH: %s\nBRANCH: %s\nREVISION: %s\nWORKING_TREE: %s\nDECISION: %s\n",
 			row.ID, row.Repository, row.Path, row.Branch, row.Revision, row.WorkingTree, row.Decision)

@@ -134,3 +134,12 @@ bash tests/conformance.sh
 Apache License 2.0.
 
 [Release history](docs/RELEASE_HISTORY.md)
+
+
+### 0.8.2 hardening
+
+Manifest writes on macOS and Linux use descriptor-pinned `.wsp` operations
+instead of pathname-based replacement. Copy observation differentiates
+completed observations from unhealthy checkouts, and Git facts are collected
+with fewer subprocesses. No automatic Project mutation or external dependency
+is introduced. See `docs/PRODUCT_BOUNDARY.md` for security limitations.

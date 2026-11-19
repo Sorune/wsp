@@ -59,50 +59,23 @@ func initFromCommand(target, source string) error {
 		}
 	}
 
-	// Validate a complete candidate before creating anything at the target.
-	stage, err := os.CreateTemp("", "wsp-manifest-init-*.yaml")
-	if err != nil {
-		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
-	}
-	defer os.Remove(stage.Name())
-	if _, err := stage.Write(next); err != nil {
-		stage.Close()
-		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
-	}
-	if err := stage.Close(); err != nil {
-		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
-	}
-	validated, err := config.LoadFile(stage.Name())
+	// Validate a complete candidate in memory before creating any target.
+	validated, err := config.LoadBytes(next)
 	if err != nil {
 		return failFor(err)
 	}
-	if validated.WorkspaceID != m.WorkspaceID || len(validated.Repositories) != len(m.Repositories) ||
-		len(validated.Relations) != len(m.Relations) || len(validated.Projects) != len(m.Projects) ||
+	if validated.WorkspaceID != m.WorkspaceID ||
+		len(validated.Repositories) != len(m.Repositories) ||
+		len(validated.Relations) != len(m.Relations) ||
+		len(validated.Projects) != len(m.Projects) ||
 		len(validated.Entities) != len(m.Entities) {
 		return fail("INVALID_CONFIGURATION", "workspace copy altered declared identities or semantic counts", 4)
 	}
-	if err := os.MkdirAll(filepath.Dir(config.Path(target)), 0755); err != nil {
+	if err := os.MkdirAll(target, 0755); err != nil {
 		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
 	}
-	if err := config.CheckManifestWriteBoundary(target); err != nil {
-		return fail("INVALID_CONFIGURATION", err.Error(), 4)
-	}
-	file, err := os.OpenFile(config.Path(target), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
-	if err != nil {
-		return fail("TARGET_UNAVAILABLE", "target manifest creation blocked: "+err.Error(), 3)
-	}
-	if _, err = file.Write(next); err != nil {
-		file.Close()
-		os.Remove(config.Path(target))
-		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
-	}
-	if err = file.Sync(); err != nil {
-		file.Close()
-		os.Remove(config.Path(target))
-		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
-	}
-	if err = file.Close(); err != nil {
-		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
+	if err := config.WriteBytes(target, next); err != nil {
+		return failFor(err)
 	}
 	fmt.Printf("STATUS: INITIALIZED\nWORKSPACE: %s\nSOURCE: %s\nSOURCE_MUTATION: NONE\nMANIFEST: %s\nMUTATION: WSP_CONFIG_ONLY\n", target, source, filepath.Join(target, config.ManifestRelativePath))
 	return nil
