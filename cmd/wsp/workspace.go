@@ -248,7 +248,7 @@ func observeExactRepo(path string) (string, string, model.Document, error) {
 	// The existing read-only Git adapter intentionally normalizes SCP-style
 	// remotes for display. Read the configured raw origin only for identity
 	// matching, so non-GitHub hosts are never mislabeled as github.com.
-	rawOrigin, err := exec.Command("git", "-C", actual, "remote", "get-url", "origin").Output()
+	rawOrigin, err := exec.Command("git", "-c", "core.fsmonitor=false", "-C", actual, "remote", "get-url", "origin").Output()
 	if err != nil {
 		return "", "", model.Document{}, fmt.Errorf("Git origin is unavailable")
 	}
@@ -463,12 +463,26 @@ func manifestTextValue(value string) string {
 // are never silently broken. The temporary file is validated before replace.
 func patchWorkspace(root string, transform func([]byte, config.Manifest) ([]byte, error)) (bool, error) {
 	path := config.Path(root)
+	if err := config.CheckManifestWriteBoundary(root); err != nil {
+		return false, err
+	}
 	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return false, fmt.Errorf("manifest update lock unavailable: %w", err)
 	}
-	lock.Close()
-	defer os.Remove(path + ".lock")
+	lockInfo, infoErr := lock.Stat()
+	if closeErr := lock.Close(); closeErr != nil {
+		return false, closeErr
+	}
+	if infoErr != nil {
+		return false, infoErr
+	}
+	defer func() {
+		// A competing writer's replacement lock must never be deleted by us.
+		if current, statErr := os.Lstat(path + ".lock"); statErr == nil && os.SameFile(lockInfo, current) {
+			_ = os.Remove(path + ".lock")
+		}
+	}()
 	m, err := config.Load(root)
 	if err != nil {
 		return false, err
@@ -507,6 +521,9 @@ func patchWorkspace(root string, transform func([]byte, config.Manifest) ([]byte
 	}
 	if _, err = config.LoadFile(stagePath); err != nil {
 		return false, fmt.Errorf("candidate manifest invalid: %w", err)
+	}
+	if err = config.CheckManifestWriteBoundary(root); err != nil {
+		return false, err
 	}
 	if err = os.Rename(stagePath, path); err != nil {
 		return false, err

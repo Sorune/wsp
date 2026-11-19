@@ -234,3 +234,33 @@ The example file supplies a complete starting point with one workspace, two
 Projects, two Repositories, a generic session-context entity, and explicitly
 identified relations on both axes. Copy its contents into the manifest after
 `init`, then replace the example paths.
+
+
+## Manifest parsing and write-boundary safety (0.8.1 hardening)
+
+Workspace manifests use the deliberately bounded WSP YAML subset, not the
+full YAML language. Top-level keys are `schema_version`, `workspace_id`,
+`entities`, `projects`, `repositories` and `relations`. Collections use
+`[]` or indented list items; item fields must be explicitly supported.
+Scalars may be Go-compatible escaped double-quoted strings or plain values.
+Full-line comments are allowed. Unknown keys, duplicate top-level keys
+or item fields, malformed quotes, unsupported anchors/multiline constructs,
+duplicate IDs across all declared entities/relations, and unresolved
+relations fail validation without mutation.
+
+A physical `WORKSPACE_COPY` declaration with path and origin must have
+exactly one `contains` logical relation from a declared Repository.
+Historical placeholders without physical metadata remain readable, but
+cannot claim a tracked physical checkout.
+
+`init`, `init --from`, `workspace add`, `workspace relocate` and
+`workspace copy add` refuse linked `.wsp` directories and linked/special
+manifest destinations. This prevents following a pre-existing symbolic
+link outside the selected Workspace config directory. Repository path
+aliases remain separate from the Product-owned manifest write boundary.
+Read-only Git observation disables `core.fsmonitor` side effects.
+
+This guard covers pre-existing, statically observable links. A malicious
+actor concurrently replacing filesystem path components is a distinct
+race threat requiring a separately authorized descriptor-relative I/O
+design; ordinary local use does not claim a race-proof sandbox.

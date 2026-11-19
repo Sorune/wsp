@@ -22,7 +22,7 @@ type Facts struct {
 }
 
 func command(path string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", path}, args...)...)
+	cmd := exec.Command("git", append([]string{"-c", "core.fsmonitor=false", "-C", path}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

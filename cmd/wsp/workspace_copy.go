@@ -58,7 +58,7 @@ func workspaceCopyCommand(args []string) error {
 		return copyDiscover(targetPath(args[1]), targetPath(args[2]), len(args) == 4)
 	case "add":
 		if len(args) != 6 || args[4] != "--id" {
-			return fail("USAGE", "workspace copy add <root> <repository-id> <checkout> --id <copy-id>", 2)
+			return fail("USAGE", "workspace copy add <root> <repository-id> <checkout> --id <copy-id> [--allow-diverged]", 2)
 		}
 		return copyAdd(targetPath(args[1]), args[2], targetPath(args[3]), args[5])
 	default:
@@ -94,7 +94,7 @@ func relatedCommits(parent, child, parentSHA, childSHA string) bool {
 	}
 	for _, gitRoot := range []string{parent, child} {
 		for _, pair := range [][2]string{{parentSHA, childSHA}, {childSHA, parentSHA}} {
-			if exec.Command("git", "-C", gitRoot, "merge-base", "--is-ancestor", pair[0], pair[1]).Run() == nil {
+			if exec.Command("git", "-c", "core.fsmonitor=false", "-C", gitRoot, "merge-base", "--is-ancestor", pair[0], pair[1]).Run() == nil {
 				return true
 			}
 		}

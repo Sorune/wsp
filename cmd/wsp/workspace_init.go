@@ -29,6 +29,9 @@ func initFromCommand(target, source string) error {
 	} else if err != nil && !os.IsNotExist(err) {
 		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
 	}
+	if err := config.CheckManifestWriteBoundary(target); err != nil {
+		return fail("INVALID_CONFIGURATION", err.Error(), 4)
+	}
 	if _, err := os.Lstat(config.Path(target)); err == nil {
 		return fail("INVALID_CONFIGURATION", "target workspace already has a manifest", 4)
 	} else if !os.IsNotExist(err) {
@@ -80,6 +83,9 @@ func initFromCommand(target, source string) error {
 	}
 	if err := os.MkdirAll(filepath.Dir(config.Path(target)), 0755); err != nil {
 		return fail("TARGET_UNAVAILABLE", err.Error(), 3)
+	}
+	if err := config.CheckManifestWriteBoundary(target); err != nil {
+		return fail("INVALID_CONFIGURATION", err.Error(), 4)
 	}
 	file, err := os.OpenFile(config.Path(target), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {

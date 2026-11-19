@@ -108,6 +108,14 @@ Lens preserves the authored pathname and can additionally expose a physical
 resolved path when a symlink target is available. Physical unavailability must
 not imply Project deletion.
 
+The Product-owned manifest write boundary rejects linked `.wsp` directories
+and symlink/special-file manifest targets. Read-only Git collection disables
+configured core.fsmonitor commands. Manifest input is a strictly validated
+bounded YAML subset; duplicate IDs and multiply-parented physical Copies
+are invalid configurations. These checks do not make filesystem path swaps
+by an adversarial concurrent writer impossible; that remains a separate
+platform-level I/O security boundary.
+
 workspace list observes multiple declared repositories and distinguishes
 UNAVAILABLE from IDENTITY_MISMATCH. Neither state authorizes cleanup or
 changes a Project's semantics.

@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,17 +48,31 @@ func Write(root string, m Manifest) error {
 		return err
 	}
 	path := Path(root)
-	if _, err := os.Stat(path); err == nil {
+	if err := CheckManifestWriteBoundary(root); err != nil {
+		return err
+	}
+	if _, err := os.Lstat(path); err == nil {
 		return fmt.Errorf("INVALID_CONFIGURATION: manifest already exists")
+	} else if !os.IsNotExist(err) {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	if err := CheckManifestWriteBoundary(root); err != nil {
 		return err
 	}
 	b, err := Render(m)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, b, 0644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(b)
+	return err
 }
 
 // Render serializes a validated manifest without writing it to disk.
@@ -132,14 +147,16 @@ func Load(root string) (Manifest, error) {
 // LoadFile parses and validates one manifest without requiring it to be
 // installed at the conventional workspace path.
 func LoadFile(path string) (Manifest, error) {
-	f, err := os.Open(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("TARGET_UNAVAILABLE: manifest unavailable: %w", err)
 	}
-	defer f.Close()
+	if err := validateManifestSubset(raw); err != nil {
+		return Manifest{}, err
+	}
 	m := Manifest{}
 	section, item := "", -1
-	s := bufio.NewScanner(f)
+	s := bufio.NewScanner(bytes.NewReader(raw))
 	for s.Scan() {
 		line := strings.TrimRight(s.Text(), " \t")
 		trim := strings.TrimSpace(line)
@@ -292,26 +309,71 @@ func Validate(m Manifest) error {
 		return fmt.Errorf("INVALID_CONFIGURATION: schema_version and workspace_id are required")
 	}
 	entities := []model.Entity{{ID: m.WorkspaceID, Kind: "WORKSPACE"}}
+	globalIDs := map[string]bool{m.WorkspaceID: true}
+	register := func(id string) error {
+		if id == "" || globalIDs[id] {
+			return fmt.Errorf("INVALID_CONFIGURATION: duplicate or empty declared ID %q", id)
+		}
+		globalIDs[id] = true
+		return nil
+	}
 	for _, entity := range m.Entities {
+		if err := register(entity.ID); err != nil {
+			return err
+		}
 		if entity.ID == "" || entity.Kind == "" {
 			return fmt.Errorf("INVALID_CONFIGURATION: entity id and kind required")
 		}
 		entities = append(entities, model.Entity{ID: entity.ID, Kind: entity.Kind})
 	}
 	for _, p := range m.Projects {
+		if err := register(p.ID); err != nil {
+			return err
+		}
 		if p.ID == "" {
 			return fmt.Errorf("INVALID_CONFIGURATION: project id required")
 		}
 		entities = append(entities, model.Entity{ID: p.ID, Kind: "PROJECT"})
 	}
 	for _, r := range m.Repositories {
+		if err := register(r.ID); err != nil {
+			return err
+		}
 		if r.ID == "" || r.Path == "" {
 			return fmt.Errorf("INVALID_CONFIGURATION: repository id and path required")
 		}
 		entities = append(entities, model.Entity{ID: r.ID, Kind: "REPOSITORY"})
 	}
+	for _, r := range m.Relations {
+		if err := register(r.ID); err != nil {
+			return err
+		}
+	}
 	if err := relation.Validate(m.Relations, entities); err != nil {
 		return err
+	}
+	for _, entity := range m.Entities {
+		if entity.Kind != "WORKSPACE_COPY" || entity.Path == "" || entity.Origin == "" {
+			// Historical placeholders without physical metadata remain readable.
+			continue
+		}
+		parentCount := 0
+		for _, rel := range m.Relations {
+			if rel.To != entity.ID {
+				continue
+			}
+			if rel.Type != "contains" || rel.Axis != "logical" {
+				return fmt.Errorf("INVALID_RELATION: physical copy has unsupported parent relation")
+			}
+			for _, repo := range m.Repositories {
+				if repo.ID == rel.From {
+					parentCount++
+				}
+			}
+		}
+		if parentCount != 1 {
+			return fmt.Errorf("INVALID_RELATION: physical copy %q requires exactly one declared Repository parent", entity.ID)
+		}
 	}
 	return nil
 }
